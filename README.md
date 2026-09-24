@@ -9,6 +9,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - [chess.js](https://github.com/jhlywa/chess.js) for the rules of chess
 - [react-chessboard](https://github.com/Clariity/react-chessboard) for the board
 - [@typesafe-ai/sdk](https://www.npmjs.com/package/@typesafe-ai/sdk) for Jev, called only from the server
+- [Stockfish.js](https://github.com/nmrugg/stockfish.js) 19 Lite, running in the browser in a Web Worker
 - [Vitest](https://vitest.dev) with Testing Library for unit tests
 - [Playwright](https://playwright.dev) for end-to-end tests
 
@@ -17,6 +18,8 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Play against Jev as White, Black or a random colour, with six personalities and three difficulty levels
 - A Jev panel showing the move played, Jev's confidence, and its top candidate moves
 - A local fallback move, clearly labelled, when Jev fails or times out
+- Play against Stockfish at three difficulty levels, with its evaluation and expected line shown
+- An evaluation bar beside the board, from a background Stockfish analysis, which can be turned off
 - Local two-player games on one device
 - Move by clicking or by dragging pieces
 - Legal-move dots, capture rings, and last-move and check highlights
@@ -29,7 +32,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
 - Layouts for desktop and phone screens
 
-Stockfish and hybrid opponents arrive in later build phases. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
+A hybrid opponent, where Stockfish shortlists moves and Jev picks one, arrives in a later build phase. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
 
 ## Requirements
 
@@ -85,6 +88,16 @@ Before the first end-to-end run on a new machine, install the browser Playwright
 npx playwright install chromium
 ```
 
+## Third-party licences
+
+Stockfish is free software under the GNU General Public License v3. The engine
+files are copied from the `stockfish` npm package into `public/stockfish/` by
+`scripts/copy-stockfish.mjs`, which runs after `npm install` and before `dev`
+and `build`. The licence is served alongside the engine at
+`/stockfish/Copying.txt`, and the Stockfish panel links to it and to the
+engine's source code. Anyone deploying this app publicly must follow the
+GPL's terms for the engine.
+
 ## Adding UI components
 
 shadcn/ui is configured in `components.json`. Add components with:
@@ -103,6 +116,8 @@ src/hooks/             React hooks, including the game state hook
 src/lib/chess/         rules, clocks and game state reducer, free of React
 src/lib/jev/           Jev prompt, move selection, mock, fallback and route validation
 src/app/api/jev/move/  the server route that calls Jev
+src/lib/stockfish/     UCI parsing, the Web Worker engine wrapper and Stockfish's move choice
+scripts/               engine copy step and the live Jev smoke test
 src/lib/               settings, sounds, board themes and shared helpers
 e2e/                   Playwright tests
 ```

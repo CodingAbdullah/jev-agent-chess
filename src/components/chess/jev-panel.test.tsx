@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { JevDecision } from "@/hooks/use-jev-opponent";
+import type { AiDecision } from "@/hooks/use-ai-opponent";
+import type { JevMoveResponse } from "@/lib/jev/types";
 import { JevPanel } from "./jev-panel";
 
 const base = {
@@ -14,7 +15,7 @@ const base = {
   onRetry: () => {},
 };
 
-const decision: JevDecision = {
+const decision: AiDecision<JevMoveResponse> = {
   move: { from: "g8", to: "f6" },
   san: "Nf6",
   source: "jev",

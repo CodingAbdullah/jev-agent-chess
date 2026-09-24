@@ -18,7 +18,7 @@ decisions, with their confidence, are shown in the UI.
 | Rules       | chess.js 1.4                    | Final authority on every move               |
 | Board       | react-chessboard 5.12           | Uses dnd-kit for dragging                   |
 | AI judgment | @typesafe-ai/sdk 0.6            | Server only, through `src/lib/jev/client.ts` |
-| Engine      | stockfish 19 (WASM)             | Not installed yet. Phase 5. GPL-3.0         |
+| Engine      | stockfish 19 Lite (WASM)        | Browser Web Worker. GPL-3.0                 |
 | Tests       | Vitest, Testing Library, Playwright 1.56.1 | Playwright is pinned on purpose  |
 
 ## Phases
@@ -29,8 +29,8 @@ decisions, with their confidence, are shown in the UI.
 | 2 | Board, legal-move highlights, check and checkmate, castling, promotion, en passant, local two-player play | Done |
 | 3 | Clocks, move history, captured pieces, undo, FEN and PGN import and export, board flip, themes, sound, game-over dialog, phone layout | Done |
 | 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Built and tested against the mock. Live check pending |
-| 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Next |
-| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | To do |
+| 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Done |
+| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Next |
 | 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | To do |
 
 Each phase ends with lint, type checks, unit tests, the production build and the
@@ -46,7 +46,8 @@ browser tests all passing, then one commit pushed to the working branch.
    answers. Check how the real API reports errors and limits.
 2. **Add rate limiting to `/api/jev/move` before any public deployment.** Right
    now anyone who can reach the site can spend the API key's quota.
-3. **Phase 5, Stockfish mode.**
+3. **Phase 6, hybrid mode.** Stockfish's engine wrapper already supports MultiPV,
+   so it can return its top five candidates with scores for Jev to choose from.
 
 ## Design decisions
 
@@ -74,8 +75,13 @@ browser tests all passing, then one commit pushed to the working branch.
 - **Undo against Jev** takes back Jev's reply and the player's last move together.
 - **Choices are capped at 60 per question**, keeping the most forcing moves,
   because TypeSafe has not published a limit.
-- **Evaluation bar** comes from Stockfish. In Jev-only mode a Jev score question
-  can fill it, labelled as Jev's judgment rather than an engine evaluation.
+- **Evaluation bar** comes from a separate background Stockfish worker in every
+  mode, including vs Jev. It is on by default and can be turned off in
+  Settings, since it gives hints during play. A Jev score question could fill
+  it instead in Jev games, but that is not built.
+- **Stockfish difficulty** uses Skill Level and search limits: Easy is skill 2
+  at depth 4, Medium skill 8 at depth 8, Hard skill 20 at depth 16, each with a
+  time cap of 0.4, 0.8 and 1.5 seconds.
 - **Stockfish** runs in the browser in a Web Worker, using the lite
   single-threaded build. It is about 1.6MB and needs no special server headers.
 - **Stockfish is GPL-3.0 and this repo is MIT.** Shipping it means the deployed
@@ -113,8 +119,24 @@ browser tests all passing, then one commit pushed to the working branch.
   request is cancelled by undo, new game or a flag. Jev's moves wait at least
   500 ms so they do not feel instant.
 - `src/components/chess/jev-panel.tsx`: the Jev panel and its candidate chart.
-- The new game dialog lists vs Stockfish and Hybrid, disabled and marked
-  "Soon". Enable them as each phase lands.
+- `scripts/copy-stockfish.mjs`: copies the engine's JS, WASM and GPL licence
+  into `public/stockfish/`, which git ignores. It runs on `postinstall`,
+  `predev` and `prebuild`. The loader finds its WASM by swapping `.js` for
+  `.wasm` in its own URL, so the two files must stay side by side.
+- `src/lib/stockfish/uci.ts`: pure UCI helpers: parsing `info` and `bestmove`,
+  scores from White's side, evaluation bar share, and the difficulty levels.
+- `src/lib/stockfish/engine.ts`: `StockfishEngine` wraps one Web Worker. It
+  runs searches one at a time, sends `stop` on cancel and waits for `bestmove`
+  so the engine stays in sync. Tests drive it with a fake worker.
+- `src/hooks/use-ai-opponent.ts`: the shared turn-taking hook for Jev and
+  Stockfish. It takes a `think` function and handles cancellation, retries and
+  the decision history for the panels.
+- `src/hooks/use-stockfish.ts`: `useStockfishEngine` owns a worker's lifetime,
+  and `useEvaluation` streams the background analysis for the evaluation bar.
+- The settings field `jevColor` was renamed `playerColor`. Older saved
+  settings are migrated when read.
+- The new game dialog lists Hybrid, disabled and marked "Soon". Enable it when
+  phase 6 lands.
 
 ## What we know about Jev
 
@@ -176,5 +198,6 @@ console.log(response.answers.category.choice);
   in the cloud environment. On a new machine run `npx playwright install chromium`.
 - After a drag, dnd-kit ignores clicks for 50ms. Browser tests pause briefly
   after a drag for that reason. See `e2e/helpers.ts`.
+- ESLint ignores `public/stockfish/**`, the minified third-party engine.
 - When stopping a stray Next.js server, match it with `pkill -f "[n]ext-server"`
   so the pattern cannot match the shell running the command.

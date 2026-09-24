@@ -1,15 +1,23 @@
 "use client";
 
+import type { Color } from "chess.js";
 import { useEffect, useEffectEvent, useState } from "react";
-import { aiColor, type GameConfig } from "@/lib/game-config";
-import { requestJevMove } from "@/lib/jev/api";
-import type { JevMoveResponse } from "@/lib/jev/types";
+import type { MoveInput } from "@/lib/chess/game";
 import type { ChessGame, MoveOutcome } from "./use-chess-game";
 
-/** Jev's moves arrive quickly. A short pause keeps them from feeling instant and jarring. */
+/** Computer moves can arrive very quickly. A short pause keeps them from feeling jarring. */
 export const MIN_THINK_MS = 500;
 
-export type JevDecision = JevMoveResponse & { gameId: number; ply: number };
+/** What a computer player must return: the move, plus any details its panel shows. */
+export type AiMove = { move: MoveInput; san: string };
+
+export type AiDecision<D extends AiMove> = D & { gameId: number; ply: number };
+
+/** Ask the computer for a move in this position. Must reject if `signal` fires. */
+export type Think<D extends AiMove> = (
+  position: { fen: string; history: string[] },
+  signal: AbortSignal,
+) => Promise<D>;
 
 function pause(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -22,42 +30,38 @@ function pause(ms: number, signal: AbortSignal) {
   });
 }
 
-type Options = {
-  config: GameConfig;
+type Options<D extends AiMove> = {
+  /** The side the computer plays, or null when nobody does. */
+  color: Color | null;
   game: ChessGame;
+  think: Think<D>;
   onMove: (outcome: MoveOutcome) => void;
 };
 
 /**
- * Plays Jev's side. Whenever it is Jev's turn it asks the server for a move,
- * checks it with chess.js through the game, and plays it. Moving on (undo, new
- * game, a flag) cancels any request still in flight.
+ * Plays the computer's side. Whenever it is the computer's turn it asks
+ * `think` for a move, plays it through the game (where chess.js checks it),
+ * and records the decision for the panel. Undo, a new game or a flag cancels
+ * any thinking still in progress.
  */
-export function useJevOpponent({ config, game, onMove }: Options) {
-  const ai = aiColor(config);
-  const aiTurn = ai !== null && !game.gameOver && game.chess.turn() === ai;
+export function useAiOpponent<D extends AiMove>({ color, game, think, onMove }: Options<D>) {
+  const aiTurn = color !== null && !game.gameOver && game.chess.turn() === color;
   const positionKey = `${game.gameId}:${game.revision}`;
 
   const [attempt, setAttempt] = useState(0);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
-  const [decisions, setDecisions] = useState<JevDecision[]>([]);
+  const [decisions, setDecisions] = useState<AiDecision<D>[]>([]);
   const attemptKey = `${positionKey}:${attempt}`;
 
-  const buildRequest = useEffectEvent(() => {
-    if (config.mode !== "jev") throw new Error("Jev is not playing this game");
-    return {
-      fen: game.chess.fen(),
-      history: game.history.map((move) => move.san),
-      personality: config.personality,
-      difficulty: config.difficulty,
-    };
-  });
+  const ask = useEffectEvent((signal: AbortSignal) =>
+    think({ fen: game.chess.fen(), history: game.history.map((move) => move.san) }, signal),
+  );
 
-  const play = useEffectEvent((decision: JevMoveResponse) => {
+  const play = useEffectEvent((decision: D) => {
     const ply = game.history.length;
     const outcome = game.makeMove(decision.move);
     if (!outcome) {
-      setFailure({ key: attemptKey, message: "Jev's move could not be played on this board." });
+      setFailure({ key: attemptKey, message: "The computer's move could not be played on this board." });
       return;
     }
     setDecisions((list) => [
@@ -73,14 +77,14 @@ export function useJevOpponent({ config, game, onMove }: Options) {
     if (!aiTurn) return;
     const controller = new AbortController();
     const started = Date.now();
-    requestJevMove(buildRequest(), controller.signal)
+    ask(controller.signal)
       .then(async (decision) => {
         await pause(MIN_THINK_MS - (Date.now() - started), controller.signal);
         if (!controller.signal.aborted) play(decision);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        fail(error instanceof Error ? error.message : "Jev could not be reached.");
+        fail(error instanceof Error ? error.message : "The computer could not choose a move.");
       });
     return () => controller.abort();
   }, [aiTurn, attemptKey]);
@@ -94,7 +98,6 @@ export function useJevOpponent({ config, game, onMove }: Options) {
     ) ?? null;
 
   return {
-    aiColor: ai,
     thinking: aiTurn && !error,
     error,
     lastDecision,

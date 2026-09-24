@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useChessGame, type MoveOutcome } from "@/hooks/use-chess-game";
-import { useJevOpponent } from "@/hooks/use-jev-opponent";
+import { useAiOpponent, type Think } from "@/hooks/use-ai-opponent";
 import { useSettings } from "@/hooks/use-settings";
+import { useEvaluation, useStockfishEngine, type Evaluation } from "@/hooks/use-stockfish";
 import { findBoardTheme } from "@/lib/board-themes";
 import { findTimeControl, TIME_CONTROLS } from "@/lib/chess/clock";
 import {
@@ -21,16 +22,24 @@ import {
   type MoveInput,
 } from "@/lib/chess/game";
 import {
+  aiColor,
+  aiName,
+  aiSetupLabel,
   configFromSettings,
+  isAiGame,
   modeLabel,
   pgnNames,
   playerNames,
   type GameConfig,
 } from "@/lib/game-config";
-import { difficultyLabel, personalityLabel } from "@/lib/jev/types";
+import { requestJevMove } from "@/lib/jev/api";
+import type { JevMoveResponse } from "@/lib/jev/types";
 import { getSettings } from "@/lib/settings";
 import { playSound, soundForMove } from "@/lib/sound";
+import { stockfishMove, type StockfishMove } from "@/lib/stockfish/player";
+import { describeScore, formatScore, whiteShare } from "@/lib/stockfish/uci";
 import { cn } from "@/lib/utils";
+import { EvalBar } from "./eval-bar";
 import { GameBoard } from "./game-board";
 import { GameOverDialog } from "./game-over-dialog";
 import { GameToolbar } from "./game-toolbar";
@@ -40,11 +49,12 @@ import { MoveHistory } from "./move-history";
 import { NewGameDialog, type GameSetup } from "./new-game-dialog";
 import { PlayerBar } from "./player-bar";
 import { SettingsDialog } from "./settings-dialog";
+import { StockfishPanel } from "./stockfish-panel";
 
 type OpenDialog = "new" | "settings" | "import-export" | null;
 
 const orientationFor = (config: GameConfig) =>
-  config.mode === "jev" && config.humanColor === "b" ? "black" : "white";
+  isAiGame(config) && config.humanColor === "b" ? "black" : "white";
 
 export function ChessApp() {
   const [settings, updateSettings] = useSettings();
@@ -85,8 +95,43 @@ export function ChessApp() {
     [soundOn],
   );
 
-  const jev = useJevOpponent({ config, game, onMove: announceMove });
-  const humanColor = config.mode === "jev" ? config.humanColor : null;
+  const computerColor = aiColor(config);
+  const humanColor = isAiGame(config) ? config.humanColor : null;
+
+  const jevThink = useCallback<Think<JevMoveResponse>>(
+    (position, signal) => {
+      if (config.mode !== "jev") return Promise.reject(new Error("Jev is not playing this game."));
+      return requestJevMove(
+        { ...position, personality: config.personality, difficulty: config.difficulty },
+        signal,
+      );
+    },
+    [config],
+  );
+  const jev = useAiOpponent({
+    color: config.mode === "jev" ? computerColor : null,
+    game,
+    think: jevThink,
+    onMove: announceMove,
+  });
+
+  const getOpponentEngine = useStockfishEngine(config.mode === "stockfish");
+  const stockfishThink = useCallback<Think<StockfishMove>>(
+    async (position, signal) => {
+      if (config.mode !== "stockfish") throw new Error("Stockfish is not playing this game.");
+      return stockfishMove(getOpponentEngine(), position.fen, config.difficulty, signal);
+    },
+    [config, getOpponentEngine],
+  );
+  const stockfish = useAiOpponent({
+    color: config.mode === "stockfish" ? computerColor : null,
+    game,
+    think: stockfishThink,
+    onMove: announceMove,
+  });
+
+  const evaluation = useEvaluation({ enabled: settings.showEvaluation, fen: chess.fen(), gameOver });
+  const evalDisplay = describeEvaluation(evaluation, status);
 
   const handleMove = useCallback(
     (input: MoveInput) => {
@@ -166,17 +211,24 @@ export function ChessApp() {
           className="mx-auto flex w-full max-w-[640px] min-w-[280px] flex-col gap-2 lg:col-start-2 lg:row-start-1 lg:max-w-[min(640px,calc(100dvh_-_17rem))]"
         >
           {playerBar(topColor)}
-          <GameBoard
-            chess={chess}
-            lastMove={game.history.at(-1) ?? null}
-            interactive={!gameOver && humansTurn}
-            orientation={orientation}
-            lightSquareColor={boardTheme.light}
-            darkSquareColor={boardTheme.dark}
-            showCoordinates={settings.showCoordinates}
-            positionKey={gameEndKey}
-            onMove={handleMove}
-          />
+          <div className="flex items-stretch gap-1.5 sm:gap-2">
+            {settings.showEvaluation && (
+              <EvalBar whiteShare={evalDisplay.share} label={evalDisplay.label} orientation={orientation} />
+            )}
+            <div className="min-w-0 flex-1">
+              <GameBoard
+                chess={chess}
+                lastMove={game.history.at(-1) ?? null}
+                interactive={!gameOver && humansTurn}
+                orientation={orientation}
+                lightSquareColor={boardTheme.light}
+                darkSquareColor={boardTheme.dark}
+                showCoordinates={settings.showCoordinates}
+                positionKey={gameEndKey}
+                onMove={handleMove}
+              />
+            </div>
+          </div>
           {playerBar(bottomColor)}
           <GameToolbar
             canUndo={pliesToUndo > 0}
@@ -202,6 +254,13 @@ export function ChessApp() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <StatusLine status={status} names={names} />
+              {settings.showEvaluation && (
+                <p className="text-muted-foreground text-sm" data-testid="evaluation">
+                  Evaluation{" "}
+                  <span className="text-foreground font-semibold tabular-nums">{evalDisplay.text}</span>
+                  {evalDisplay.detail && <span> · {evalDisplay.detail}</span>}
+                </p>
+              )}
               {gameOver && (
                 <Button variant="outline" onClick={() => setDialog("new")}>
                   Play again
@@ -212,9 +271,9 @@ export function ChessApp() {
         </aside>
 
         <aside className="mx-auto flex w-full max-w-[640px] flex-col gap-4 sm:gap-6 lg:col-start-3 lg:row-start-1">
-          {config.mode === "jev" && jev.aiColor && (
+          {config.mode === "jev" && computerColor && (
             <JevPanel
-              jevColor={jev.aiColor}
+              jevColor={computerColor}
               personality={config.personality}
               difficulty={config.difficulty}
               thinking={jev.thinking}
@@ -222,6 +281,17 @@ export function ChessApp() {
               decision={jev.lastDecision}
               gameOver={gameOver}
               onRetry={jev.retry}
+            />
+          )}
+          {config.mode === "stockfish" && computerColor && (
+            <StockfishPanel
+              stockfishColor={computerColor}
+              difficulty={config.difficulty}
+              thinking={stockfish.thinking}
+              error={stockfish.error}
+              decision={stockfish.lastDecision}
+              gameOver={gameOver}
+              onRetry={stockfish.retry}
             />
           )}
           <Card className="gap-2">
@@ -234,7 +304,7 @@ export function ChessApp() {
                 lastPly={game.history.length - 1}
                 className={cn(
                   "max-h-64",
-                  config.mode === "jev"
+                  isAiGame(config)
                     ? "lg:max-h-[min(14rem,calc(100dvh_-_36rem))]"
                     : "lg:max-h-[min(28rem,calc(100dvh_-_14rem))]",
                 )}
@@ -250,7 +320,7 @@ export function ChessApp() {
         defaults={{
           mode: settings.mode,
           timeControl: settings.timeControl,
-          jevColor: settings.jevColor,
+          playerColor: settings.playerColor,
           personality: settings.personality,
           difficulty: settings.difficulty,
         }}
@@ -272,11 +342,7 @@ export function ChessApp() {
         }}
         status={status}
         names={names}
-        subtitle={
-          config.mode === "jev"
-            ? `Jev: ${personalityLabel(config.personality)}, ${difficultyLabel(config.difficulty)}`
-            : undefined
-        }
+        subtitle={isAiGame(config) ? `${aiName(config)}: ${aiSetupLabel(config)}` : undefined}
         onRematch={rematch}
         onExport={() => {
           setDismissedGameEnd(gameEndKey);
@@ -285,6 +351,33 @@ export function ChessApp() {
       />
     </div>
   );
+}
+
+/** What the evaluation bar and caption show, including finished games. */
+function describeEvaluation(
+  evaluation: Evaluation,
+  status: GameStatus,
+): { share: number | null; text: string; detail: string | null; label: string } {
+  if (status.kind === "checkmate" || status.kind === "timeout") {
+    const text = status.winner === "w" ? "1-0" : "0-1";
+    return { share: status.winner === "w" ? 1 : 0, text, detail: null, label: `Game over, ${text}.` };
+  }
+  if (status.kind === "draw") {
+    return { share: 0.5, text: "½-½", detail: null, label: "Game over, drawn." };
+  }
+  if (evaluation.status === "error") {
+    return { share: null, text: "unavailable", detail: evaluation.message, label: "Evaluation unavailable." };
+  }
+  if (evaluation.status === "analysing" && evaluation.score) {
+    const text = formatScore(evaluation.score);
+    return {
+      share: whiteShare(evaluation.score),
+      text,
+      detail: `depth ${evaluation.depth}`,
+      label: `Evaluation ${text}. ${describeScore(evaluation.score)}.`,
+    };
+  }
+  return { share: null, text: "…", detail: "analysing", label: "Analysing the position." };
 }
 
 function isTimeoutEnd(status: GameStatus) {

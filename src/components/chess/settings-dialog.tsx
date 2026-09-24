@@ -99,6 +99,18 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         </div>
 
         <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="evaluation-switch">Evaluation bar</Label>
+            <p className="text-muted-foreground text-xs">Stockfish&apos;s view of the position, beside the board.</p>
+          </div>
+          <Switch
+            id="evaluation-switch"
+            checked={settings.showEvaluation}
+            onCheckedChange={(showEvaluation) => updateSettings({ showEvaluation })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
           <Label htmlFor="coordinates-switch">Board coordinates</Label>
           <Switch
             id="coordinates-switch"

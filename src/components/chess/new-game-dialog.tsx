@@ -14,13 +14,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TIME_CONTROLS } from "@/lib/chess/clock";
-import { DIFFICULTIES, PERSONALITIES } from "@/lib/jev/types";
+import { DIFFICULTIES, PERSONALITIES, type DifficultyId } from "@/lib/jev/types";
+import { STOCKFISH_LEVELS } from "@/lib/stockfish/uci";
 import type { Settings } from "@/lib/settings";
 
 const MODES = [
   { id: "jev", label: "vs Jev", available: true },
   { id: "local", label: "2 Players", available: true },
-  { id: "stockfish", label: "vs Stockfish", available: false },
+  { id: "stockfish", label: "vs Stockfish", available: true },
   { id: "hybrid", label: "Hybrid", available: false },
 ] as const;
 
@@ -31,7 +32,12 @@ const COLORS = [
 ] as const;
 
 /** The choices this dialog makes. They are saved as settings for next time. */
-export type GameSetup = Pick<Settings, "mode" | "timeControl" | "jevColor" | "personality" | "difficulty">;
+export type GameSetup = Pick<Settings, "mode" | "timeControl" | "playerColor" | "personality" | "difficulty">;
+
+const stockfishHint = (id: DifficultyId) => {
+  const level = STOCKFISH_LEVELS[id];
+  return `Skill level ${level.skill} of 20, searching up to ${level.depth} moves deep.`;
+};
 
 type NewGameDialogProps = {
   open: boolean;
@@ -64,6 +70,9 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
   const update = (patch: Partial<GameSetup>) => setSetup((current) => ({ ...current, ...patch }));
   const personality = PERSONALITIES.find((option) => option.id === setup.personality);
   const difficulty = DIFFICULTIES.find((option) => option.id === setup.difficulty);
+  const againstComputer = setup.mode === "jev" || setup.mode === "stockfish";
+  const difficultyHint =
+    setup.mode === "stockfish" ? stockfishHint(setup.difficulty) : difficulty?.description;
 
   return (
     <>
@@ -76,7 +85,9 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
         <ToggleGroup
           type="single"
           value={setup.mode}
-          onValueChange={(value) => (value === "jev" || value === "local") && update({ mode: value })}
+          onValueChange={(value) =>
+            (value === "jev" || value === "local" || value === "stockfish") && update({ mode: value })
+          }
           variant="outline"
           aria-labelledby="mode-label"
           className="grid w-full grid-cols-2"
@@ -94,14 +105,14 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
         </ToggleGroup>
       </Field>
 
-      {setup.mode === "jev" && (
+      {againstComputer && (
         <>
           <Field label="You play" id="color">
             <ToggleGroup
               type="single"
-              value={setup.jevColor}
+              value={setup.playerColor}
               onValueChange={(value) =>
-                (value === "w" || value === "b" || value === "random") && update({ jevColor: value })
+                (value === "w" || value === "b" || value === "random") && update({ playerColor: value })
               }
               variant="outline"
               aria-labelledby="color-label"
@@ -115,28 +126,30 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
             </ToggleGroup>
           </Field>
 
-          <Field label="Jev's personality" id="personality" hint={personality?.description}>
-            <ToggleGroup
-              type="single"
-              value={setup.personality}
-              onValueChange={(value) => {
-                const match = PERSONALITIES.find((option) => option.id === value);
-                if (match) update({ personality: match.id });
-              }}
-              variant="outline"
-              spacing={2}
-              aria-labelledby="personality-label"
-              className="grid w-full grid-cols-2 sm:grid-cols-3"
-            >
-              {PERSONALITIES.map((option) => (
-                <ToggleGroupItem key={option.id} value={option.id}>
-                  {option.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </Field>
+          {setup.mode === "jev" && (
+            <Field label="Jev's personality" id="personality" hint={personality?.description}>
+              <ToggleGroup
+                type="single"
+                value={setup.personality}
+                onValueChange={(value) => {
+                  const match = PERSONALITIES.find((option) => option.id === value);
+                  if (match) update({ personality: match.id });
+                }}
+                variant="outline"
+                spacing={2}
+                aria-labelledby="personality-label"
+                className="grid w-full grid-cols-2 sm:grid-cols-3"
+              >
+                {PERSONALITIES.map((option) => (
+                  <ToggleGroupItem key={option.id} value={option.id}>
+                    {option.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Field>
+          )}
 
-          <Field label="Difficulty" id="difficulty" hint={difficulty?.description}>
+          <Field label="Difficulty" id="difficulty" hint={difficultyHint}>
             <ToggleGroup
               type="single"
               value={setup.difficulty}

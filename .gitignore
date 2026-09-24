@@ -153,3 +153,6 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Stockfish engine, copied from node_modules by scripts/copy-stockfish.mjs
+/public/stockfish/

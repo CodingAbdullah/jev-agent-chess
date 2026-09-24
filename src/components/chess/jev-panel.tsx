@@ -4,12 +4,13 @@ import { AlertTriangleIcon, LoaderCircleIcon, RotateCwIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { JevDecision } from "@/hooks/use-jev-opponent";
+import type { AiDecision } from "@/hooks/use-ai-opponent";
 import { COLOR_NAME, type Color } from "@/lib/chess/game";
 import {
   difficultyLabel,
   personalityLabel,
   type DifficultyId,
+  type JevMoveResponse,
   type JevSource,
   type MoveProbability,
   type PersonalityId,
@@ -36,7 +37,7 @@ type JevPanelProps = {
   difficulty: DifficultyId;
   thinking: boolean;
   error: string | null;
-  decision: JevDecision | null;
+  decision: AiDecision<JevMoveResponse> | null;
   gameOver: boolean;
   onRetry: () => void;
 };
@@ -107,7 +108,7 @@ export function JevPanel({
   );
 }
 
-function DecisionDetails({ decision, difficulty }: { decision: JevDecision; difficulty: DifficultyId }) {
+function DecisionDetails({ decision, difficulty }: { decision: AiDecision<JevMoveResponse>; difficulty: DifficultyId }) {
   if (decision.source === "fallback") {
     return (
       <div className="flex flex-col gap-1" data-testid="jev-decision">

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Providers } from "@/components/providers";
 import { ChessApp } from "./chess-app";
@@ -54,5 +54,27 @@ describe("ChessApp", () => {
     const toolbar = screen.getByRole("toolbar", { name: "Game controls" });
     expect(within(toolbar).getByRole("button", { name: "Undo" })).toBeDisabled();
     expect(screen.getByText("No moves yet.")).toBeInTheDocument();
+  });
+
+  it("explains that the evaluation is unavailable without Web Workers", async () => {
+    renderApp();
+    expect(screen.getByTestId("eval-bar")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("evaluation")).toHaveTextContent("unavailable"));
+  });
+
+  it("hides the evaluation when it is turned off", () => {
+    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ showEvaluation: false }));
+    renderApp();
+    expect(screen.queryByTestId("eval-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("evaluation")).not.toBeInTheDocument();
+  });
+
+  it("shows the Stockfish panel in Stockfish games", () => {
+    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ mode: "stockfish", playerColor: "w" }));
+    renderApp();
+    expect(screen.getByTestId("game-mode")).toHaveTextContent("vs Stockfish");
+    expect(screen.getByTestId("player-b")).toHaveTextContent("Stockfish");
+    expect(screen.getByTestId("stockfish-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("jev-panel")).not.toBeInTheDocument();
   });
 });

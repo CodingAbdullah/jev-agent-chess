@@ -2,7 +2,9 @@ import { DEFAULT_BOARD_THEME_ID } from "./board-themes";
 import { DEFAULT_TIME_CONTROL_ID } from "./chess/clock";
 import { isDifficulty, isPersonality, type DifficultyId, type PersonalityId } from "./jev/types";
 
-export type GameMode = "local" | "jev";
+export type GameMode = "local" | "jev" | "stockfish";
+
+const GAME_MODES: readonly GameMode[] = ["local", "jev", "stockfish"];
 export type ColorChoice = "w" | "b" | "random";
 
 /** Per-device preferences. Light and dark mode are handled separately by next-themes. */
@@ -13,9 +15,11 @@ export type Settings = {
   timeControl: string;
   /** The last game setup chosen, so the new game dialog opens with it. */
   mode: GameMode;
-  jevColor: ColorChoice;
+  /** Your colour against Jev or Stockfish. */
+  playerColor: ColorChoice;
   personality: PersonalityId;
   difficulty: DifficultyId;
+  showEvaluation: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,9 +28,10 @@ export const DEFAULT_SETTINGS: Settings = {
   showCoordinates: true,
   timeControl: DEFAULT_TIME_CONTROL_ID,
   mode: "jev",
-  jevColor: "w",
+  playerColor: "w",
   personality: "balanced",
   difficulty: "medium",
+  showEvaluation: true,
 };
 
 const STORAGE_KEY = "jev-chess:settings";
@@ -46,20 +51,21 @@ function readRaw(): string | null {
 function parse(raw: string | null): Settings {
   if (!raw) return DEFAULT_SETTINGS;
   try {
-    const stored = JSON.parse(raw) as Partial<Settings>;
+    // `jevColor` is the older name for `playerColor`.
+    const stored = JSON.parse(raw) as Partial<Settings> & { jevColor?: unknown };
+    const color = stored.playerColor ?? stored.jevColor;
     return {
       boardTheme: typeof stored.boardTheme === "string" ? stored.boardTheme : DEFAULT_SETTINGS.boardTheme,
       sound: typeof stored.sound === "boolean" ? stored.sound : DEFAULT_SETTINGS.sound,
       showCoordinates:
         typeof stored.showCoordinates === "boolean" ? stored.showCoordinates : DEFAULT_SETTINGS.showCoordinates,
       timeControl: typeof stored.timeControl === "string" ? stored.timeControl : DEFAULT_SETTINGS.timeControl,
-      mode: stored.mode === "local" || stored.mode === "jev" ? stored.mode : DEFAULT_SETTINGS.mode,
-      jevColor:
-        stored.jevColor === "w" || stored.jevColor === "b" || stored.jevColor === "random"
-          ? stored.jevColor
-          : DEFAULT_SETTINGS.jevColor,
+      mode: GAME_MODES.includes(stored.mode as GameMode) ? (stored.mode as GameMode) : DEFAULT_SETTINGS.mode,
+      playerColor: color === "w" || color === "b" || color === "random" ? color : DEFAULT_SETTINGS.playerColor,
       personality: isPersonality(stored.personality) ? stored.personality : DEFAULT_SETTINGS.personality,
       difficulty: isDifficulty(stored.difficulty) ? stored.difficulty : DEFAULT_SETTINGS.difficulty,
+      showEvaluation:
+        typeof stored.showEvaluation === "boolean" ? stored.showEvaluation : DEFAULT_SETTINGS.showEvaluation,
     };
   } catch {
     return DEFAULT_SETTINGS;
