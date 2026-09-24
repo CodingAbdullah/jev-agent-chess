@@ -48,7 +48,12 @@ browser tests all passing, then one commit pushed to the working branch.
    The current limiter is in memory, so each server instance counts on its own.
 3. **Deployment:** the owner deploys to Vercel and publishes the project as
    open source. Docker support lets anyone self-host.
-4. **Continuous integration for contributors.** Add a GitHub Actions workflow
+4. **Merge the working branch into `main`.** All the work so far is on
+   `claude/typescript-project-scaffold-tgecg6`. The owner opens a pull request
+   into `main` and merges it. The workflows below run from `main` and version
+   tags, so they do nothing until this happens. Vercel should deploy from
+   `main` as well.
+5. **Continuous integration for contributors.** Add a GitHub Actions workflow
    that runs on every pull request and on pushes to `main`:
    - `npm ci`, then `npm run check` (lint, type checks, unit tests).
    - `npx playwright install --with-deps chromium`, then `npm run test:e2e`.
@@ -56,7 +61,7 @@ browser tests all passing, then one commit pushed to the working branch.
      no secrets are needed. Upload the Playwright report when tests fail.
    - A `docker build` of the image, so Dockerfile breakage is caught.
    - Never give pull requests from forks access to `TYPESAFE_API_KEY`.
-5. **Publish a prebuilt Docker image to GitHub's registry (GHCR).** Add
+6. **Publish a prebuilt Docker image to GitHub's registry (GHCR).** Add
    `.github/workflows/docker-publish.yml`:
    - Runs on version tags such as `v1.0.0` or on a published release, and
      optionally on pushes to `main` to keep a `latest` image.
@@ -71,14 +76,35 @@ browser tests all passing, then one commit pushed to the working branch.
      GitHub profile's Packages tab, so anyone can pull it without logging in.
    - Add the one-line `docker run` for the published image to the README's
      Docker section.
-6. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
+7. **A release step.** The owner makes each release from `main`:
+   - Bump the version with `npm version patch`, `minor` or `major`. It
+     updates `package.json` (now `0.1.0`) and `package-lock.json`, commits,
+     and creates the matching `vX.Y.Z` tag.
+   - Push the commit and the tag with `git push --follow-tags`. The tag starts
+     the publish workflow from step 6.
+   - Create a GitHub release for the tag with short notes on what changed.
+   - `package.json` keeps `"private": true` so the app is never published
+     to npm by mistake.
+   - Describe these steps in `CONTRIBUTING.md` for future maintainers.
+8. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
    Node 22 and `.env.example`; that no API key is needed thanks to the mock;
    the scripts to run before opening a pull request; keeping the axe
    accessibility tests passing; never committing keys; and that contributions
    are accepted under GPL-3.0-or-later. Link it from the README.
-7. **Ideas not yet built:** resign and draw offers, a review mode for stepping
-   through finished games, and a Jev score question for the evaluation bar in
-   Jev games.
+9. **Open-source housekeeping.**
+   - `SECURITY.md`: how to report a vulnerability privately, through GitHub's
+     private vulnerability reporting (the owner turns it on under Settings,
+     then Security), not a public issue. Say which versions get fixes (the
+     latest release) and that a leaked `TYPESAFE_API_KEY` should be revoked
+     in TypeSafe's dashboard straight away.
+   - `.github/dependabot.yml`: weekly update checks for npm, GitHub Actions
+     and the Docker base image. Group minor and patch npm updates into one
+     pull request so they are easy to review. CI from step 5 tests each one.
+     Keep `@playwright/test` pinned: ignore its updates, since its version
+     must match the Chromium in the cloud environment.
+10. **Ideas not yet built:** resign and draw offers, a review mode for stepping
+    through finished games, and a Jev score question for the evaluation bar in
+    Jev games.
 
 ## Design decisions
 
