@@ -6,10 +6,21 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 
 - [Next.js](https://nextjs.org) with the App Router, React and TypeScript
 - [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com)
+- [chess.js](https://github.com/jhlywa/chess.js) for the rules of chess
+- [react-chessboard](https://github.com/Clariity/react-chessboard) for the board
 - [Vitest](https://vitest.dev) with Testing Library for unit tests
 - [Playwright](https://playwright.dev) for end-to-end tests
 
-Chess rules, Jev and Stockfish arrive in later build phases.
+## Current features
+
+- Local two-player games on one device
+- Move by clicking or by dragging pieces
+- Legal-move dots, capture rings, and last-move and check highlights
+- Castling, en passant, and promotion with a piece picker
+- Checkmate and every draw rule: stalemate, insufficient material, threefold repetition and the fifty-move rule
+- New game at any time
+
+Jev and Stockfish opponents arrive in later build phases.
 
 ## Requirements
 
@@ -55,10 +66,13 @@ npx shadcn@latest add dialog
 ## Layout
 
 ```
-src/app/             pages, layouts and global styles
-src/components/ui/   shadcn/ui components
-src/lib/             shared helpers
-e2e/                 Playwright tests
+src/app/               pages, layouts and global styles
+src/components/chess/  board, promotion picker and game screen
+src/components/ui/     shadcn/ui components
+src/hooks/             React hooks, including the game state hook
+src/lib/chess/         chess rules and game status helpers, free of React
+src/lib/               shared helpers
+e2e/                   Playwright tests
 ```
 
 Unit tests sit next to the code they test, named `*.test.ts` or `*.test.tsx`.

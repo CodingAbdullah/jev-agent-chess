@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import Home from "./page";
 
@@ -10,11 +10,14 @@ describe("Home page", () => {
     ).toBeInTheDocument();
   });
 
-  it("lists every planned game mode", () => {
+  it("starts a two-player game with White to move", () => {
     render(<Home />);
-    const modes = within(screen.getByRole("list", { name: "Game modes" }));
-    for (const mode of ["vs Jev", "vs Stockfish", "Hybrid", "2 Players"]) {
-      expect(modes.getByText(mode)).toBeInTheDocument();
-    }
+    expect(screen.getByTestId("game-status")).toHaveTextContent("White to move.");
+    expect(screen.getByText("2 Players")).toBeInTheDocument();
+  });
+
+  it("disables New game until a move is played", () => {
+    render(<Home />);
+    expect(screen.getByRole("button", { name: "New game" })).toBeDisabled();
   });
 });
