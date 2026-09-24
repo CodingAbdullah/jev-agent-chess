@@ -287,3 +287,13 @@ describe("toPgn", () => {
     expect(pgn).toContain('[Result "1-0"]');
   });
 });
+
+describe("describeStatus with player names", () => {
+  const names = { w: "You", b: "Jev" } as const;
+
+  it("names the winner", () => {
+    expect(describeStatus({ kind: "checkmate", winner: "b" }, names)).toBe("Checkmate. Jev wins.");
+    expect(describeStatus({ kind: "checkmate", winner: "w" }, names)).toBe("Checkmate. You win.");
+    expect(describeStatus({ kind: "timeout", winner: "b" }, names)).toBe("You ran out of time. Jev wins.");
+  });
+});

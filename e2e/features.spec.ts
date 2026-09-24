@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { pieceOn, play, square, startNewGame, status } from "./helpers";
+import { pieceOn, play, preferLocalMode, square, startNewGame, status } from "./helpers";
 
 const clockOf = (page: import("@playwright/test").Page, side: "White" | "Black") =>
   page.getByRole("timer", { name: `${side} clock` });
 
 test.describe("with the real clock", () => {
   test.beforeEach(async ({ page }) => {
+    await preferLocalMode(page);
     await page.goto("/");
     await expect(status(page)).toHaveText("White to move.");
   });
@@ -140,6 +141,7 @@ test.describe("with the real clock", () => {
 // below allow for the fraction of a second the test itself takes.
 test.describe("with a controlled clock", () => {
   test.beforeEach(async ({ page }) => {
+    await preferLocalMode(page);
     await page.clock.install();
     await page.goto("/");
     await expect(status(page)).toHaveText("White to move.");

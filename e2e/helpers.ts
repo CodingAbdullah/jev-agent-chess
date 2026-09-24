@@ -48,3 +48,16 @@ export async function startNewGame(page: Page, timeControl: string) {
   await dialog.getByRole("button", { name: "Start game" }).click();
   await expect(dialog).toBeHidden();
 }
+
+/**
+ * Start in two-player mode unless the test has already saved other settings.
+ * Runs before every page load, so it must not overwrite what a test changes.
+ */
+export async function preferLocalMode(page: Page) {
+  await page.addInitScript(() => {
+    const key = "jev-chess:settings";
+    if (!window.localStorage.getItem(key)) {
+      window.localStorage.setItem(key, JSON.stringify({ mode: "local" }));
+    }
+  });
+}

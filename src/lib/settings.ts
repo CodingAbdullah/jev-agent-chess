@@ -1,5 +1,9 @@
 import { DEFAULT_BOARD_THEME_ID } from "./board-themes";
 import { DEFAULT_TIME_CONTROL_ID } from "./chess/clock";
+import { isDifficulty, isPersonality, type DifficultyId, type PersonalityId } from "./jev/types";
+
+export type GameMode = "local" | "jev";
+export type ColorChoice = "w" | "b" | "random";
 
 /** Per-device preferences. Light and dark mode are handled separately by next-themes. */
 export type Settings = {
@@ -7,6 +11,11 @@ export type Settings = {
   sound: boolean;
   showCoordinates: boolean;
   timeControl: string;
+  /** The last game setup chosen, so the new game dialog opens with it. */
+  mode: GameMode;
+  jevColor: ColorChoice;
+  personality: PersonalityId;
+  difficulty: DifficultyId;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -14,6 +23,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   showCoordinates: true,
   timeControl: DEFAULT_TIME_CONTROL_ID,
+  mode: "jev",
+  jevColor: "w",
+  personality: "balanced",
+  difficulty: "medium",
 };
 
 const STORAGE_KEY = "jev-chess:settings";
@@ -40,6 +53,13 @@ function parse(raw: string | null): Settings {
       showCoordinates:
         typeof stored.showCoordinates === "boolean" ? stored.showCoordinates : DEFAULT_SETTINGS.showCoordinates,
       timeControl: typeof stored.timeControl === "string" ? stored.timeControl : DEFAULT_SETTINGS.timeControl,
+      mode: stored.mode === "local" || stored.mode === "jev" ? stored.mode : DEFAULT_SETTINGS.mode,
+      jevColor:
+        stored.jevColor === "w" || stored.jevColor === "b" || stored.jevColor === "random"
+          ? stored.jevColor
+          : DEFAULT_SETTINGS.jevColor,
+      personality: isPersonality(stored.personality) ? stored.personality : DEFAULT_SETTINGS.personality,
+      difficulty: isDifficulty(stored.difficulty) ? stored.difficulty : DEFAULT_SETTINGS.difficulty,
     };
   } catch {
     return DEFAULT_SETTINGS;

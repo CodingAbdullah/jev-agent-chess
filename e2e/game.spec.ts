@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { drag, pieceOn, play, press, status } from "./helpers";
+import { drag, pieceOn, play, preferLocalMode, press, status } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
+  await preferLocalMode(page);
   await page.goto("/");
   await expect(status(page)).toHaveText("White to move.");
 });

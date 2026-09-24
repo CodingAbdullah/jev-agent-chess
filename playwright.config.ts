@@ -22,5 +22,7 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    // Browser tests always use the mock Jev, even when a real API key is set.
+    env: { JEV_MOCK: "1" },
   },
 });

@@ -14,31 +14,42 @@ import {
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TIME_CONTROLS } from "@/lib/chess/clock";
+import { DIFFICULTIES, PERSONALITIES } from "@/lib/jev/types";
+import type { Settings } from "@/lib/settings";
 
 const MODES = [
+  { id: "jev", label: "vs Jev", available: true },
   { id: "local", label: "2 Players", available: true },
-  { id: "jev", label: "vs Jev", available: false },
   { id: "stockfish", label: "vs Stockfish", available: false },
   { id: "hybrid", label: "Hybrid", available: false },
 ] as const;
 
+const COLORS = [
+  { id: "w", label: "White" },
+  { id: "b", label: "Black" },
+  { id: "random", label: "Random" },
+] as const;
+
+/** The choices this dialog makes. They are saved as settings for next time. */
+export type GameSetup = Pick<Settings, "mode" | "timeControl" | "jevColor" | "personality" | "difficulty">;
+
 type NewGameDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultTimeControl: string;
-  onStart: (timeControlId: string) => void;
+  defaults: GameSetup;
+  onStart: (setup: GameSetup) => void;
 };
 
-export function NewGameDialog({ open, onOpenChange, defaultTimeControl, onStart }: NewGameDialogProps) {
+export function NewGameDialog({ open, onOpenChange, defaults, onStart }: NewGameDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        {/* Remount the form each time the dialog opens, so it starts from the saved time control. */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+        {/* Remount the form each time the dialog opens, so it starts from the saved setup. */}
         {open && (
           <NewGameForm
-            defaultTimeControl={defaultTimeControl}
-            onStart={(id) => {
-              onStart(id);
+            defaults={defaults}
+            onStart={(setup) => {
+              onStart(setup);
               onOpenChange(false);
             }}
           />
@@ -48,14 +59,11 @@ export function NewGameDialog({ open, onOpenChange, defaultTimeControl, onStart 
   );
 }
 
-function NewGameForm({
-  defaultTimeControl,
-  onStart,
-}: {
-  defaultTimeControl: string;
-  onStart: (timeControlId: string) => void;
-}) {
-  const [timeControl, setTimeControl] = useState(defaultTimeControl);
+function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (setup: GameSetup) => void }) {
+  const [setup, setSetup] = useState(defaults);
+  const update = (patch: Partial<GameSetup>) => setSetup((current) => ({ ...current, ...patch }));
+  const personality = PERSONALITIES.find((option) => option.id === setup.personality);
+  const difficulty = DIFFICULTIES.find((option) => option.id === setup.difficulty);
 
   return (
     <>
@@ -64,22 +72,17 @@ function NewGameForm({
         <DialogDescription>Starting a new game ends the current one.</DialogDescription>
       </DialogHeader>
 
-      <div className="flex flex-col gap-2">
-        <Label id="mode-label">Mode</Label>
+      <Field label="Mode" id="mode">
         <ToggleGroup
           type="single"
-          value="local"
+          value={setup.mode}
+          onValueChange={(value) => (value === "jev" || value === "local") && update({ mode: value })}
           variant="outline"
           aria-labelledby="mode-label"
           className="grid w-full grid-cols-2"
         >
           {MODES.map((mode) => (
-            <ToggleGroupItem
-              key={mode.id}
-              value={mode.id}
-              disabled={!mode.available}
-              className="justify-between gap-2"
-            >
+            <ToggleGroupItem key={mode.id} value={mode.id} disabled={!mode.available} className="justify-between gap-2">
               {mode.label}
               {!mode.available && (
                 <Badge variant="secondary" className="text-[10px]">
@@ -89,14 +92,77 @@ function NewGameForm({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-      </div>
+      </Field>
 
-      <div className="flex flex-col gap-2">
-        <Label id="time-label">Time control</Label>
+      {setup.mode === "jev" && (
+        <>
+          <Field label="You play" id="color">
+            <ToggleGroup
+              type="single"
+              value={setup.jevColor}
+              onValueChange={(value) =>
+                (value === "w" || value === "b" || value === "random") && update({ jevColor: value })
+              }
+              variant="outline"
+              aria-labelledby="color-label"
+              className="grid w-full grid-cols-3"
+            >
+              {COLORS.map((color) => (
+                <ToggleGroupItem key={color.id} value={color.id}>
+                  {color.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+
+          <Field label="Jev's personality" id="personality" hint={personality?.description}>
+            <ToggleGroup
+              type="single"
+              value={setup.personality}
+              onValueChange={(value) => {
+                const match = PERSONALITIES.find((option) => option.id === value);
+                if (match) update({ personality: match.id });
+              }}
+              variant="outline"
+              spacing={2}
+              aria-labelledby="personality-label"
+              className="grid w-full grid-cols-2 sm:grid-cols-3"
+            >
+              {PERSONALITIES.map((option) => (
+                <ToggleGroupItem key={option.id} value={option.id}>
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+
+          <Field label="Difficulty" id="difficulty" hint={difficulty?.description}>
+            <ToggleGroup
+              type="single"
+              value={setup.difficulty}
+              onValueChange={(value) => {
+                const match = DIFFICULTIES.find((option) => option.id === value);
+                if (match) update({ difficulty: match.id });
+              }}
+              variant="outline"
+              aria-labelledby="difficulty-label"
+              className="grid w-full grid-cols-3"
+            >
+              {DIFFICULTIES.map((option) => (
+                <ToggleGroupItem key={option.id} value={option.id}>
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+        </>
+      )}
+
+      <Field label="Time control" id="time">
         <ToggleGroup
           type="single"
-          value={timeControl}
-          onValueChange={(value) => value && setTimeControl(value)}
+          value={setup.timeControl}
+          onValueChange={(value) => value && update({ timeControl: value })}
           variant="outline"
           spacing={2}
           aria-labelledby="time-label"
@@ -116,13 +182,33 @@ function NewGameForm({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-      </div>
+      </Field>
 
       <DialogFooter>
-        <Button onClick={() => onStart(timeControl)} className="w-full sm:w-auto">
+        <Button onClick={() => onStart(setup)} className="w-full sm:w-auto">
           Start game
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+function Field({
+  label,
+  id,
+  hint,
+  children,
+}: {
+  label: string;
+  id: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label id={`${id}-label`}>{label}</Label>
+      {children}
+      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+    </div>
   );
 }

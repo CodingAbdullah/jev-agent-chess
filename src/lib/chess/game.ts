@@ -105,12 +105,18 @@ export function getStatus(chess: Chess, flagged: Color | null = null): GameStatu
 
 export const isGameOver = (status: GameStatus) => status.kind !== "playing";
 
-export function describeStatus(status: GameStatus): string {
+/** "White wins", "Jev wins", or "You win". */
+export function winsPhrase(name: string): string {
+  return name === "You" ? "You win" : `${name} wins`;
+}
+
+/** A sentence describing the status. `names` lets it say "Jev" or "You" instead of a colour. */
+export function describeStatus(status: GameStatus, names: Record<Color, string> = COLOR_NAME): string {
   switch (status.kind) {
     case "checkmate":
-      return `Checkmate. ${COLOR_NAME[status.winner]} wins.`;
+      return `Checkmate. ${winsPhrase(names[status.winner])}.`;
     case "timeout":
-      return `${COLOR_NAME[opponent(status.winner)]} ran out of time. ${COLOR_NAME[status.winner]} wins.`;
+      return `${names[opponent(status.winner)]} ran out of time. ${winsPhrase(names[status.winner])}.`;
     case "draw":
       return `Draw by ${DRAW_REASON_TEXT[status.reason]}.`;
     case "playing":

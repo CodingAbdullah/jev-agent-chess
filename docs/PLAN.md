@@ -17,7 +17,7 @@ decisions, with their confidence, are shown in the UI.
 | Styling     | Tailwind CSS 4, shadcn/ui       | `new-york` style, neutral colours           |
 | Rules       | chess.js 1.4                    | Final authority on every move               |
 | Board       | react-chessboard 5.12           | Uses dnd-kit for dragging                   |
-| AI judgment | @typesafe-ai/sdk 0.6            | Not installed yet. Phase 4                  |
+| AI judgment | @typesafe-ai/sdk 0.6            | Server only, through `src/lib/jev/client.ts` |
 | Engine      | stockfish 19 (WASM)             | Not installed yet. Phase 5. GPL-3.0         |
 | Tests       | Vitest, Testing Library, Playwright 1.56.1 | Playwright is pinned on purpose  |
 
@@ -28,8 +28,8 @@ decisions, with their confidence, are shown in the UI.
 | 1 | Convert the scaffold to Next.js with Tailwind, shadcn/ui, Vitest and Playwright | Done |
 | 2 | Board, legal-move highlights, check and checkmate, castling, promotion, en passant, local two-player play | Done |
 | 3 | Clocks, move history, captured pieces, undo, FEN and PGN import and export, board flip, themes, sound, game-over dialog, phone layout | Done |
-| 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Next |
-| 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | To do |
+| 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Built and tested against the mock. Live check pending |
+| 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Next |
 | 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | To do |
 | 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | To do |
 
@@ -38,14 +38,15 @@ browser tests all passing, then one commit pushed to the working branch.
 
 ## Next step
 
-Phase 4, Jev mode. It needs two things set in the cloud environment's settings,
-which only take effect in a new session:
-
-- `TYPESAFE_API_KEY` as an environment variable or API credential. Never commit it.
-- `api.typesafe.ai` added to the allowed network domains.
-
-Without them, build against a mock Jev client and test with it. The SDK accepts
-a custom `fetch`, which makes mocking straightforward.
+1. **Finish phase 4 against the live API** once a key is available. Set
+   `TYPESAFE_API_KEY` in the cloud environment's settings, add `api.typesafe.ai`
+   to its allowed network domains, and start a new session, since settings only
+   reach new sessions. Then run `npm run jev:smoke`, play a few games with the
+   mock turned off, and tune the prompt wording and `MAX_CHOICES` against real
+   answers. Check how the real API reports errors and limits.
+2. **Add rate limiting to `/api/jev/move` before any public deployment.** Right
+   now anyone who can reach the site can spend the API key's quota.
+3. **Phase 5, Stockfish mode.**
 
 ## Design decisions
 
@@ -67,6 +68,12 @@ a custom `fetch`, which makes mocking straightforward.
   skill level and search depth.
 - **Jev panel** shows the chosen move, its confidence, and a bar chart of the
   next-best alternatives from Jev's probabilities.
+- **Personalities** also include Balanced, the default, which simply asks for
+  the strongest move.
+- **vs Jev is the default mode**, with the player as White on Medium.
+- **Undo against Jev** takes back Jev's reply and the player's last move together.
+- **Choices are capped at 60 per question**, keeping the most forcing moves,
+  because TypeSafe has not published a limit.
 - **Evaluation bar** comes from Stockfish. In Jev-only mode a Jev score question
   can fill it, labelled as Jev's judgment rather than an engine evaluation.
 - **Stockfish** runs in the browser in a Web Worker, using the lite
@@ -90,8 +97,24 @@ a custom `fetch`, which makes mocking straightforward.
 - `src/lib/settings.ts`: device settings in localStorage, read with
   `useSyncExternalStore`. Light and dark mode are handled by next-themes.
 - `src/lib/sound.ts`: move sounds synthesized with Web Audio, so no audio files.
-- The new game dialog already lists vs Jev, vs Stockfish and Hybrid, disabled
-  and marked "Soon". Enable them as each phase lands.
+- `src/app/api/jev/move/route.ts`: the only Jev entry point. It validates the
+  request with `src/lib/jev/validate.ts`, then calls `decideMove`.
+- `src/lib/jev/client.ts`: builds the SDK client. It is marked `server-only`.
+  With no `TYPESAFE_API_KEY`, or with `JEV_MOCK=1`, it plugs the mock from
+  `src/lib/jev/mock.ts` into the SDK's `fetch` option, so the whole SDK path
+  still runs. Playwright's web server always sets `JEV_MOCK=1`.
+- `src/lib/jev/prompt.ts`: builds the System One request. Choice labels are SAN
+  moves, and each description says what the move does. The state holds the FEN,
+  side to move, check, material balance and the last 16 moves.
+- `src/lib/jev/decide.ts`: calls Jev, rejects any label that is not a legal
+  move, applies difficulty with `select.ts`, and falls back to
+  `heuristic.ts` with a plain-language reason when Jev fails.
+- `src/hooks/use-jev-opponent.ts`: plays Jev's turns in the browser. A pending
+  request is cancelled by undo, new game or a flag. Jev's moves wait at least
+  500 ms so they do not feel instant.
+- `src/components/chess/jev-panel.tsx`: the Jev panel and its candidate chart.
+- The new game dialog lists vs Stockfish and Hybrid, disabled and marked
+  "Soon". Enable them as each phase lands.
 
 ## What we know about Jev
 
@@ -101,7 +124,9 @@ a given state and only ever returns one of the options it was given, with
 probabilities. TypeSafe's docs site was unreachable from the build environment,
 so everything below comes from the SDK's own README and type definitions.
 
-- Package `@typesafe-ai/sdk`, version 0.6.0 at the time of writing. Node 20 or newer.
+- Package `@typesafe-ai/sdk`, version 0.6.0, installed. Node 20 or newer.
+- The SDK returns the API's JSON body unchanged, so its TypeScript types are
+  the wire format. The mock returns exactly that shape.
 - `new TypeSafeClient()` reads `TYPESAFE_API_KEY`, and optionally
   `TYPESAFE_BASE_URL` (default `https://api.typesafe.ai`), `TYPESAFE_DEFAULT_MODEL`
   (default `jev-latest`) and `TYPESAFE_LOG_LEVEL`.

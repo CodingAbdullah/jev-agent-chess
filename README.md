@@ -8,11 +8,15 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com)
 - [chess.js](https://github.com/jhlywa/chess.js) for the rules of chess
 - [react-chessboard](https://github.com/Clariity/react-chessboard) for the board
+- [@typesafe-ai/sdk](https://www.npmjs.com/package/@typesafe-ai/sdk) for Jev, called only from the server
 - [Vitest](https://vitest.dev) with Testing Library for unit tests
 - [Playwright](https://playwright.dev) for end-to-end tests
 
 ## Current features
 
+- Play against Jev as White, Black or a random colour, with six personalities and three difficulty levels
+- A Jev panel showing the move played, Jev's confidence, and its top candidate moves
+- A local fallback move, clearly labelled, when Jev fails or times out
 - Local two-player games on one device
 - Move by clicking or by dragging pieces
 - Legal-move dots, capture rings, and last-move and check highlights
@@ -25,7 +29,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
 - Layouts for desktop and phone screens
 
-Jev and Stockfish opponents arrive in later build phases. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
+Stockfish and hybrid opponents arrive in later build phases. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
 
 ## Requirements
 
@@ -40,6 +44,26 @@ npm run dev
 
 Then open http://localhost:3000.
 
+## Connecting Jev
+
+The app reads your TypeSafe API key from the `TYPESAFE_API_KEY` environment
+variable on the server. The key is never sent to the browser. Never commit it.
+
+```bash
+# .env.local, which git ignores
+TYPESAFE_API_KEY=your-key-here
+```
+
+Without a key, the app uses a local mock that answers in Jev's format. The Jev
+panel marks those moves "Mock". Set `JEV_MOCK=1` to force the mock even when a
+key is set. The browser tests always do this.
+
+Check the live connection with one real call:
+
+```bash
+npm run jev:smoke
+```
+
 ## Scripts
 
 | Script               | What it does                                     |
@@ -53,6 +77,7 @@ Then open http://localhost:3000.
 | `npm run test:watch` | Runs Vitest in watch mode                        |
 | `npm run test:e2e`   | Builds the app and runs the Playwright tests     |
 | `npm run check`      | Runs lint, typecheck and unit tests together     |
+| `npm run jev:smoke`  | Makes one live Jev call to check the key         |
 
 Before the first end-to-end run on a new machine, install the browser Playwright needs:
 
@@ -76,6 +101,8 @@ src/components/chess/  game screen, board, clocks, move list and dialogs
 src/components/ui/     shadcn/ui components
 src/hooks/             React hooks, including the game state hook
 src/lib/chess/         rules, clocks and game state reducer, free of React
+src/lib/jev/           Jev prompt, move selection, mock, fallback and route validation
+src/app/api/jev/move/  the server route that calls Jev
 src/lib/               settings, sounds, board themes and shared helpers
 e2e/                   Playwright tests
 ```
