@@ -3,10 +3,11 @@ import { Chess } from "chess.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-const post = (body: unknown) =>
+const post = (body: unknown, ip = "203.0.113.1") =>
   POST(
     new Request("http://localhost/api/jev/move", {
       method: "POST",
+      headers: { "x-forwarded-for": ip },
       body: typeof body === "string" ? body : JSON.stringify(body),
     }),
   );
@@ -80,5 +81,21 @@ describe("POST /api/jev/move", () => {
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "None of the candidates is a legal move in this position." });
+  });
+
+  it("limits how often one client can ask for moves", async () => {
+    vi.stubEnv("JEV_RATE_LIMIT_PER_MINUTE", "2");
+    vi.stubEnv("JEV_MOCK", "1");
+    const body = { fen: START, history: [], personality: "balanced", difficulty: "hard" };
+    expect((await post(body, "198.51.100.9")).status).toBe(200);
+    expect((await post(body, "198.51.100.9")).status).toBe(200);
+    const limited = await post(body, "198.51.100.9");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("30");
+    expect(await limited.json()).toEqual({
+      error: "You are asking for moves too quickly. Try again in 30 seconds.",
+    });
+    // Another client is unaffected.
+    expect((await post(body, "198.51.100.10")).status).toBe(200);
   });
 });

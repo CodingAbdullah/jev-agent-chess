@@ -22,7 +22,8 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    // Browser tests always use the mock Jev, even when a real API key is set.
-    env: { JEV_MOCK: "1" },
+    // Browser tests always use the mock Jev, even when a real API key is set,
+    // and lift the rate limits, since parallel tests share one address.
+    env: { JEV_MOCK: "1", JEV_RATE_LIMIT_PER_MINUTE: "100000", JEV_GLOBAL_RATE_LIMIT_PER_MINUTE: "100000" },
   },
 });
