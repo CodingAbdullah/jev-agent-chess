@@ -46,7 +46,9 @@ browser tests all passing, then one commit pushed to the working branch.
    answers. Check how the real API reports errors and limits.
 2. **Before a multi-instance deployment, move rate limiting to a shared store.**
    The current limiter is in memory, so each server instance counts on its own.
-3. **Ideas not yet built:** resign and draw offers, a review mode for stepping
+3. **Deployment:** the owner deploys to Vercel and publishes the project as
+   open source. Docker support lets anyone self-host.
+4. **Ideas not yet built:** resign and draw offers, a review mode for stepping
    through finished games, and a Jev score question for the evaluation bar in
    Jev games.
 
@@ -167,6 +169,12 @@ browser tests all passing, then one commit pushed to the working branch.
   `parseTypedMove` from `game.ts`.
 - `src/app/icon.svg`, `error.tsx` and `not-found.tsx`: app icon and error pages.
   This Next.js version passes `retry`, not `reset`, to error pages.
+- `Dockerfile`, `compose.yaml`, `.dockerignore` and `.env.example`: container
+  build with Next.js standalone output, enabled only when
+  `BUILD_STANDALONE=1`, so Vercel and `npm start` use the default output. The
+  dependency stage installs with `--ignore-scripts`, and `npm run build` then
+  copies the Stockfish engine in its prebuild step. The image runs as `node`,
+  has a health check, and holds no secrets.
 - The board exposes the current position as `data-fen`, which the full-game
   browser tests read to choose legal moves.
 
@@ -235,5 +243,9 @@ console.log(response.answers.category.choice);
   dialog in light and dark mode. Keep it passing when adding UI.
 - Next.js adds its own hidden `role="alert"` region, so scope alert locators in
   tests to the component under test.
+- Docker works in the cloud environment after starting `dockerd`, but builds
+  need `--network host`, the sandbox CA as a build secret and the proxy passed
+  in. Use a scratch copy of the Dockerfile for that; never commit those
+  workarounds.
 - When stopping a stray Next.js server, match it with `pkill -f "[n]ext-server"`
   so the pattern cannot match the shell running the command.

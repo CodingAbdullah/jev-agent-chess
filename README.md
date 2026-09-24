@@ -56,9 +56,10 @@ The app reads your TypeSafe API key from the `TYPESAFE_API_KEY` environment
 variable on the server. The key is never sent to the browser. Never commit it.
 
 ```bash
-# .env.local, which git ignores
-TYPESAFE_API_KEY=your-key-here
+cp .env.example .env.local   # then add your key; git ignores .env.local
 ```
+
+`.env.example` lists every setting the app reads.
 
 Without a key, the app uses a local mock that answers in Jev's format. The Jev
 panel marks those moves "Mock". Set `JEV_MOCK=1` to force the mock even when a
@@ -81,6 +82,49 @@ Check the live connection with one real call:
 ```bash
 npm run jev:smoke
 ```
+
+## Deploy
+
+### Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FCodingAbdullah%2Fjev-agent-chess&env=TYPESAFE_API_KEY&envDescription=Your%20TypeSafe%20AI%20API%20key.%20Leave%20empty%20to%20use%20the%20mock%20Jev.)
+
+1. Import the repository into Vercel, or use the button above.
+2. Add `TYPESAFE_API_KEY` under Settings, then Environment Variables. Add the
+   rate-limit variables too if you want other limits.
+3. Deploy. Vercel builds the app with its default settings; nothing else is
+   needed.
+
+Vercel runs many short-lived copies of the server, and each keeps its own
+in-memory rate-limit counts. For a public deployment, add a rate-limiting rule
+for `/api/jev/move` in Vercel's firewall, or move the limiter to a shared
+store such as Redis.
+
+### Docker
+
+The image uses Next.js standalone output and runs as a non-root user. Your key
+is passed when the container starts and is never stored in the image.
+
+```bash
+docker build -t jev-chess .
+docker run -p 3000:3000 -e TYPESAFE_API_KEY=your-key jev-chess
+```
+
+Or with Docker Compose, which reads settings from `.env`:
+
+```bash
+cp .env.example .env   # then add your key, or leave it empty for the mock
+docker compose up --build
+```
+
+Then open http://localhost:3000. The container reports its health through
+Docker's health check.
+
+A single container is one server process, so the built-in rate limiter works
+as intended. It identifies clients by the `X-Forwarded-For` header, so put the
+container behind a reverse proxy or load balancer that sets that header.
+Without one, all visitors share the per-client limit; the global limit still
+protects your quota either way.
 
 ## Scripts
 
