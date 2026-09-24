@@ -1,7 +1,10 @@
 import { choice, type ChoiceQuestion, type SystemOneRequest } from "@typesafe-ai/sdk";
 import type { Chess, Color, Move } from "chess.js";
+import { describeMove } from "@/lib/chess/describe";
 import { COLOR_NAME, materialBalance } from "@/lib/chess/game";
 import { moveInterest } from "./heuristic";
+
+export { describeMove };
 import type { Score } from "@/lib/stockfish/uci";
 import type { PersonalityId } from "./types";
 
@@ -14,15 +17,6 @@ export const MAX_CHOICES = 60;
 
 /** How many recent moves Jev sees as context. */
 export const HISTORY_PLIES = 16;
-
-const PIECE_NAME: Record<string, string> = {
-  p: "pawn",
-  n: "knight",
-  b: "bishop",
-  r: "rook",
-  q: "queen",
-  k: "king",
-};
 
 const STYLE: Record<PersonalityId, string> = {
   balanced: "Choose the strongest move.",
@@ -37,21 +31,6 @@ const STYLE: Record<PersonalityId, string> = {
   unpredictable:
     "Play creatively: prefer sound but unexpected moves that an opponent would not anticipate.",
 };
-
-/** A plain description of what a move does, used as the choice's description. */
-export function describeMove(move: Move): string {
-  const parts: string[] = [];
-  if (move.isKingsideCastle()) parts.push("Castles kingside");
-  else if (move.isQueensideCastle()) parts.push("Castles queenside");
-  else parts.push(`${capitalize(PIECE_NAME[move.piece]!)} from ${move.from} to ${move.to}`);
-
-  if (move.isEnPassant()) parts.push("captures a pawn en passant");
-  else if (move.captured) parts.push(`captures a ${PIECE_NAME[move.captured]}`);
-  if (move.promotion) parts.push(`promotes to a ${PIECE_NAME[move.promotion]}`);
-  if (move.san.endsWith("#")) parts.push("delivers checkmate");
-  else if (move.san.endsWith("+")) parts.push("gives check");
-  return parts.join(", ");
-}
 
 /** The legal moves Jev chooses from, capped at `MAX_CHOICES`. */
 export function candidateMoves(chess: Chess, limit = MAX_CHOICES): Move[] {
@@ -125,8 +104,4 @@ export function buildMoveRequest(
     },
     questions: { move: choice(instructions, criteria) },
   };
-}
-
-function capitalize(text: string) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

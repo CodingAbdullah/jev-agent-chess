@@ -19,6 +19,8 @@ type HybridPanelProps = {
   error: string | null;
   decision: AiDecision<HybridMove> | null;
   gameOver: boolean;
+  /** When false, Stockfish's scores stay hidden, since they reveal the evaluation. */
+  showScores: boolean;
   onRetry: () => void;
 };
 
@@ -33,6 +35,7 @@ export function HybridPanel({
   error,
   decision,
   gameOver,
+  showScores,
   onRetry,
 }: HybridPanelProps) {
   return (
@@ -68,7 +71,7 @@ export function HybridPanel({
         <div aria-live="polite" data-testid="hybrid-state">
           {thinking ? (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <LoaderCircleIcon aria-hidden="true" className="size-4 animate-spin" />
+              <LoaderCircleIcon aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
               Thinking…
             </p>
           ) : error ? (
@@ -89,13 +92,13 @@ export function HybridPanel({
           )}
         </div>
 
-        {decision && <HybridDecision decision={decision} />}
+        {decision && <HybridDecision decision={decision} showScores={showScores} />}
       </CardContent>
     </Card>
   );
 }
 
-function HybridDecision({ decision }: { decision: AiDecision<HybridMove> }) {
+function HybridDecision({ decision, showScores }: { decision: AiDecision<HybridMove>; showScores: boolean }) {
   const played = decision.shortlist.find((entry) => entry.san === decision.san);
   const jev = decision.jev;
 
@@ -124,70 +127,69 @@ function HybridDecision({ decision }: { decision: AiDecision<HybridMove> }) {
       <p className="text-muted-foreground text-xs" data-testid="hybrid-summary">
         {summary}
       </p>
-      <Shortlist decision={decision} />
+      <Shortlist decision={decision} showScores={showScores} />
     </div>
   );
 }
 
 /**
- * Stockfish's shortlist in its order, with its evaluation as text and Jev's
- * probability as a bar. The move played gets the accent colour and a text tag,
- * and every value is printed, so the list is also its own table view.
+ * Stockfish's shortlist in its order. Each row names the move, Stockfish's
+ * score and Jev's probability in text, with a full-width bar for Jev's
+ * probability underneath. The move played gets the accent colour and a
+ * visible tag, and every value is printed, so the list is its own table view.
  */
-function Shortlist({ decision }: { decision: AiDecision<HybridMove> }) {
+function Shortlist({ decision, showScores }: { decision: AiDecision<HybridMove>; showScores: boolean }) {
   const max = Math.max(...decision.shortlist.map((entry) => entry.probability ?? 0), 0.0001);
-  const hasJev = decision.shortlist.some((entry) => entry.probability !== undefined);
   return (
     <div className="flex flex-col gap-2">
-      <div
-        className="text-muted-foreground grid grid-cols-[1.25rem_3.25rem_3.5rem_1fr_2.75rem] gap-2 px-1 text-xs"
-        aria-hidden="true"
-      >
-        <span>#</span>
-        <span>Move</span>
-        <span className="text-right">Stockfish</span>
-        <span className="col-span-2">{hasJev ? "Jev" : ""}</span>
-      </div>
-      <ol aria-label="Stockfish's shortlist with Jev's probabilities" className="flex flex-col gap-1" data-testid="hybrid-shortlist">
+      <p className="text-muted-foreground text-xs" id="hybrid-shortlist-title">
+        Stockfish&apos;s shortlist, with Jev&apos;s probability for each move
+      </p>
+      <ol aria-labelledby="hybrid-shortlist-title" className="flex flex-col gap-2.5" data-testid="hybrid-shortlist">
         {decision.shortlist.map((entry) => {
           const isPlayed = entry.san === decision.san;
           return (
-            <li
-              key={entry.san}
-              className="hover:bg-muted/60 grid grid-cols-[1.25rem_3.25rem_3.5rem_1fr_2.75rem] items-center gap-2 rounded-md px-1 py-0.5 text-sm"
-            >
-              <span className="text-muted-foreground tabular-nums">{entry.rank}</span>
-              <span className={cn("truncate", isPlayed && "font-semibold")}>
-                {entry.san}
-                {isPlayed && <span className="sr-only"> (played)</span>}
-              </span>
-              <span className="text-right tabular-nums">
-                <span className="sr-only">Stockfish </span>
-                {formatScore(entry.score)}
-              </span>
-              <span className="flex h-2.5 items-center" aria-hidden="true">
-                {entry.probability !== undefined && (
+            <li key={entry.san} className="hover:bg-muted/60 flex flex-col gap-1 rounded-md px-1 py-1 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground w-4 shrink-0 tabular-nums">{entry.rank}</span>
+                <span className={cn("min-w-0 truncate", isPlayed && "font-semibold")}>{entry.san}</span>
+                {isPlayed && (
+                  <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                    played
+                  </Badge>
+                )}
+                <span className="ml-auto flex items-center gap-3 tabular-nums">
+                  {showScores && (
+                    <span className="text-muted-foreground text-xs">
+                      Stockfish <span className="text-foreground">{formatScore(entry.score)}</span>
+                    </span>
+                  )}
+                  {entry.probability !== undefined && (
+                    <span className="w-16 text-right text-xs">
+                      <span className="text-muted-foreground">Jev </span>
+                      {percent(entry.probability)}
+                    </span>
+                  )}
+                </span>
+              </div>
+              {entry.probability !== undefined && (
+                <div className="flex h-2 items-center pl-6" aria-hidden="true">
                   <span
                     className={cn("h-full rounded-r-[4px]", isPlayed ? "bg-chart-accent" : "bg-chart-muted")}
-                    style={{ width: `${Math.max(2, (entry.probability / max) * 100)}%` }}
+                    style={{ width: `${Math.max(1.5, (entry.probability / max) * 100)}%` }}
                   />
-                )}
-              </span>
-              <span className="text-right tabular-nums">
-                {entry.probability !== undefined && (
-                  <>
-                    <span className="sr-only">Jev </span>
-                    {percent(entry.probability)}
-                  </>
-                )}
-              </span>
+                </div>
+              )}
             </li>
           );
         })}
       </ol>
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-        <span aria-hidden="true" className="bg-chart-accent inline-block h-2.5 w-3 rounded-r-[4px]" />
-        Move played. Scores are from White&apos;s side.
+        <span aria-hidden="true" className="bg-chart-accent inline-block h-2 w-3 rounded-r-[4px]" />
+        Move played.
+        {showScores
+          ? " Scores are from White's side."
+          : " Stockfish's scores appear when the game ends."}
       </p>
     </div>
   );

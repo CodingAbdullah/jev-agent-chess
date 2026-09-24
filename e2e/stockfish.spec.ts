@@ -42,7 +42,24 @@ test.describe("playing Stockfish", () => {
 
     const played = await page.getByTestId("stockfish-played").textContent();
     await expect(page.getByRole("list", { name: "Move history" })).toContainText(`1.e4${played}`);
-    await expect(page.getByTestId("stockfish-score")).toHaveText(/^[+-]?\d+\.\d\d$|^-?M\d+$|^0\.00$/);
+
+    // Hints stay hidden while you play the computer.
+    await expect(page.getByTestId("stockfish-analysis-hidden")).toBeVisible();
+    await expect(page.getByTestId("stockfish-score")).toHaveCount(0);
+    await expect(page.getByTestId("eval-bar")).toHaveCount(0);
+  });
+
+  test("shows Stockfish's evaluation during play when that setting is on", async ({ page, isMobile }) => {
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("switch", { name: "Also during games against the computer" }).click();
+    await page.keyboard.press("Escape");
+    await newStockfishGame(page, { difficulty: "Medium" });
+    await expect(page.getByTestId("eval-bar")).toBeVisible();
+
+    await play(page, isMobile, "e2e4");
+    await expect(page.getByTestId("stockfish-score")).toHaveText(/^[+-]?\d+\.\d\d$|^-?M\d+$|^0\.00$/, {
+      timeout: 15_000,
+    });
   });
 
   test("undo takes back Stockfish's reply and your move", async ({ page, isMobile }) => {
@@ -71,6 +88,11 @@ test.describe("playing Stockfish", () => {
     await expect(gameOver).toBeVisible({ timeout: 15_000 });
     await expect(gameOver).toContainText("Checkmate. Stockfish wins.");
     await expect(gameOver).toContainText("Stockfish: Hard");
+
+    // Once the game is over, the analysis is shown again.
+    await gameOver.getByRole("button", { name: "View board" }).click();
+    await expect(page.getByTestId("eval-bar")).toBeVisible();
+    await expect(page.getByTestId("stockfish-score")).toHaveText("-M1");
   });
 });
 

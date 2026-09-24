@@ -1,7 +1,7 @@
 "use client";
 
 import type { Chess } from "chess.js";
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Chessboard,
   type PieceDropHandlerArgs,
@@ -20,6 +20,34 @@ import {
   type Square,
 } from "@/lib/chess/game";
 import { PromotionPicker } from "./promotion-picker";
+
+const COLOR_WORD: Record<string, string> = { w: "White", b: "Black" };
+const PIECE_WORD: Record<string, string> = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
+
+/**
+ * react-chessboard renders each piece as a keyboard-draggable button with no
+ * accessible name. Name each one, such as "White knight on g1", whenever the
+ * board adds or replaces pieces.
+ */
+function useNamedPieces(container: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const root = container.current;
+    if (!root) return;
+    const nameAll = () => {
+      for (const handle of root.querySelectorAll<HTMLElement>('[aria-roledescription="draggable"]')) {
+        const piece = handle.querySelector("[data-piece]")?.getAttribute("data-piece");
+        const square = handle.closest("[data-square]")?.getAttribute("data-square");
+        if (!piece || !square) continue;
+        const name = `${COLOR_WORD[piece[0]!] ?? ""} ${PIECE_WORD[piece[1]!] ?? "piece"} on ${square}`.trim();
+        if (handle.getAttribute("aria-label") !== name) handle.setAttribute("aria-label", name);
+      }
+    };
+    nameAll();
+    const observer = new MutationObserver(nameAll);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [container]);
+}
 
 const LAST_MOVE_TINT = "rgba(255, 213, 0, 0.35)";
 const SELECTED_TINT = "rgba(255, 213, 0, 0.55)";
@@ -41,6 +69,8 @@ type GameBoardProps = {
   showCoordinates: boolean;
   /** Changes whenever the game changes, including undo back to an earlier position. */
   positionKey: string;
+  /** Animate piece moves. Turned off when the person prefers reduced motion. */
+  animate?: boolean;
   /** Returns true when the move was accepted. */
   onMove: (move: MoveInput) => boolean;
 };
@@ -57,9 +87,12 @@ export function GameBoard({
   darkSquareColor,
   showCoordinates,
   positionKey,
+  animate = true,
   onMove,
 }: GameBoardProps) {
   const fen = chess.fen();
+  const boardRef = useRef<HTMLDivElement>(null);
+  useNamedPieces(boardRef);
   const [selection, setSelection] = useState<Tagged<Square> | null>(null);
   const [promotion, setPromotion] = useState<Tagged<{ from: Square; to: Square }> | null>(
     null,
@@ -166,7 +199,14 @@ export function GameBoard({
   }, [chess, lastMove, selected, targets]);
 
   return (
-    <div className="relative w-full" data-testid="game-board">
+    <div
+      ref={boardRef}
+      className="relative w-full"
+      data-testid="game-board"
+      data-fen={fen}
+      role="group"
+      aria-label={`Chess board, ${orientation === "white" ? "White" : "Black"} at the bottom`}
+    >
       <Chessboard
         options={{
           id: "game",
@@ -181,6 +221,7 @@ export function GameBoard({
           allowDragging: interactive,
           allowDrawingArrows: true,
           animationDurationInMs: 200,
+          showAnimations: animate,
           canDragPiece,
           onPieceDrag: handlePieceDrag,
           onPieceDrop: handlePieceDrop,

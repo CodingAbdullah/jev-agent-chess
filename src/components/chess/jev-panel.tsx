@@ -81,7 +81,7 @@ export function JevPanel({
         <div aria-live="polite" data-testid="jev-state">
           {thinking ? (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <LoaderCircleIcon aria-hidden="true" className="size-4 animate-spin" />
+              <LoaderCircleIcon aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
               Thinking…
             </p>
           ) : error ? (

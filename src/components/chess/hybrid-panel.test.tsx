@@ -12,6 +12,7 @@ const base = {
   error: null,
   decision: null,
   gameOver: false,
+  showScores: true,
   onRetry: () => {},
 };
 
@@ -53,7 +54,8 @@ describe("HybridPanel", () => {
     expect(screen.getByTestId("hybrid-source")).toHaveTextContent("Mock");
     const rows = within(screen.getByTestId("hybrid-shortlist")).getAllByRole("listitem");
     expect(rows).toHaveLength(3);
-    expect(rows[1]).toHaveTextContent("2c5 (played)Stockfish +0.35Jev 60%");
+    expect(rows[1]).toHaveTextContent("2c5playedStockfish +0.35Jev 60%");
+    expect(rows[0]).toHaveTextContent("1e5Stockfish +0.30Jev 30%");
   });
 
   it("explains a fallback and a forced move", () => {
@@ -68,5 +70,13 @@ describe("HybridPanel", () => {
     );
     rerender(<HybridPanel {...base} decision={{ ...decision, jev: null }} />);
     expect(screen.getByTestId("hybrid-summary")).toHaveTextContent("Stockfish saw only one sensible move");
+  });
+
+  it("hides Stockfish's scores while they would be a hint", () => {
+    render(<HybridPanel {...base} decision={decision} showScores={false} />);
+    const rows = within(screen.getByTestId("hybrid-shortlist")).getAllByRole("listitem");
+    expect(rows[1]).toHaveTextContent("2c5playedJev 60%");
+    expect(screen.getByTestId("hybrid-shortlist")).not.toHaveTextContent("Stockfish +");
+    expect(screen.getByText(/Stockfish's scores appear when the game ends/)).toBeInTheDocument();
   });
 });

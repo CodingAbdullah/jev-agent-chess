@@ -1,4 +1,5 @@
 import type { ClockState } from "@/lib/chess/clock";
+import { PIECE_NAME } from "@/lib/chess/describe";
 import { COLOR_NAME, opponent, type Color, type PieceSymbol } from "@/lib/chess/game";
 import { cn } from "@/lib/utils";
 import { ChessClock } from "./chess-clock";
@@ -34,7 +35,12 @@ export function PlayerBar({ color, name, captured, lead, clock, turn, active }: 
         <span className="truncate text-sm font-semibold">{name}</span>
         <div
           className="flex h-5 items-center"
-          aria-label={`Pieces captured by ${COLOR_NAME[color]}`}
+          role="img"
+          aria-label={
+            captured.length
+              ? `${COLOR_NAME[color]} has captured ${captured.map((type) => PIECE_NAME[type]).join(", ")}${lead > 0 ? `, ahead by ${lead}` : ""}`
+              : `${COLOR_NAME[color]} has captured nothing`
+          }
           data-testid={`captured-by-${color}`}
         >
           {captured.map((type, index) => (

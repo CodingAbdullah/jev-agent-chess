@@ -31,7 +31,7 @@ decisions, with their confidence, are shown in the UI.
 | 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Built and tested against the mock. Live check pending |
 | 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Done |
 | 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Done, with the mock Jev |
-| 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | Next |
+| 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | Done |
 
 Each phase ends with lint, type checks, unit tests, the production build and the
 browser tests all passing, then one commit pushed to the working branch.
@@ -44,11 +44,11 @@ browser tests all passing, then one commit pushed to the working branch.
    reach new sessions. Then run `npm run jev:smoke`, play a few games with the
    mock turned off, and tune the prompt wording and `MAX_CHOICES` against real
    answers. Check how the real API reports errors and limits.
-2. **Add rate limiting to `/api/jev/move` before any public deployment.** Right
-   now anyone who can reach the site can spend the API key's quota.
-3. **Phase 7, polish.** Full-game end-to-end tests, an accessibility pass
-   (keyboard play on the board, screen reader checks, contrast), and a final
-   phone pass.
+2. **Before a multi-instance deployment, move rate limiting to a shared store.**
+   The current limiter is in memory, so each server instance counts on its own.
+3. **Ideas not yet built:** resign and draw offers, a review mode for stepping
+   through finished games, and a Jev score question for the evaluation bar in
+   Jev games.
 
 ## Design decisions
 
@@ -76,10 +76,21 @@ browser tests all passing, then one commit pushed to the working branch.
 - **Undo against Jev** takes back Jev's reply and the player's last move together.
 - **Choices are capped at 60 per question**, keeping the most forcing moves,
   because TypeSafe has not published a limit.
-- **Evaluation bar** comes from a separate background Stockfish worker in every
-  mode, including vs Jev. It is on by default and can be turned off in
-  Settings, since it gives hints during play. A Jev score question could fill
-  it instead in Jev games, but that is not built.
+- **Evaluation bar** comes from a separate background Stockfish worker. It
+  shows in two-player games and once a game against the computer ends. While
+  playing the computer, hints stay hidden unless the player turns on "Also
+  during games against the computer": the bar and caption, the Stockfish
+  panel's evaluation and expected line, and the hybrid panel's Stockfish
+  scores. The background worker does not run while they are hidden.
+- **Rate limiting** on `/api/jev/move`: a token bucket per client address (30
+  a minute) and a global one (300 a minute), set by `JEV_RATE_LIMIT_PER_MINUTE`
+  and `JEV_GLOBAL_RATE_LIMIT_PER_MINUTE`. Over the limit returns 429 with
+  `Retry-After`, which the panels show with a retry button. Playwright's web
+  server lifts both limits.
+- **Keyboard and screen readers:** a "Type a move" box under the board accepts
+  SAN or coordinates. Board pieces get names such as "White knight on g1",
+  and each move is announced in plain words in a polite live region. Board
+  animations turn off when the system asks for reduced motion.
 - **Hybrid mode** runs Stockfish in the browser at full skill with MultiPV 5,
   then sends the shortlist to the same Jev route as optional `candidates`. The
   route re-checks every candidate against chess.js and drops illegal ones, and
@@ -123,9 +134,6 @@ browser tests all passing, then one commit pushed to the working branch.
 - `src/lib/jev/decide.ts`: calls Jev, rejects any label that is not a legal
   move, applies difficulty with `select.ts`, and falls back to
   `heuristic.ts` with a plain-language reason when Jev fails.
-- `src/hooks/use-jev-opponent.ts`: plays Jev's turns in the browser. A pending
-  request is cancelled by undo, new game or a flag. Jev's moves wait at least
-  500 ms so they do not feel instant.
 - `src/components/chess/jev-panel.tsx`: the Jev panel and its candidate chart.
 - `scripts/copy-stockfish.mjs`: copies the engine's JS, WASM and GPL licence
   into `public/stockfish/`, which git ignores. It runs on `postinstall`,
@@ -152,6 +160,15 @@ browser tests all passing, then one commit pushed to the working branch.
 - `src/components/chess/hybrid-panel.tsx`: the hybrid panel. Stockfish and
   hybrid games share one engine worker for the computer's moves.
 - Every game mode in the new game dialog is now available.
+- `src/lib/rate-limit.ts`: the in-memory token-bucket limiter and client key.
+- `src/lib/chess/describe.ts`: plain-language move descriptions, shared by the
+  Jev prompt and the screen reader announcements.
+- `src/components/chess/move-entry.tsx`: the typed move box, using
+  `parseTypedMove` from `game.ts`.
+- `src/app/icon.svg`, `error.tsx` and `not-found.tsx`: app icon and error pages.
+  This Next.js version passes `retry`, not `reset`, to error pages.
+- The board exposes the current position as `data-fen`, which the full-game
+  browser tests read to choose legal moves.
 
 ## What we know about Jev
 
@@ -214,5 +231,9 @@ console.log(response.answers.category.choice);
 - After a drag, dnd-kit ignores clicks for 50ms. Browser tests pause briefly
   after a drag for that reason. See `e2e/helpers.ts`.
 - ESLint ignores `public/stockfish/**`, the minified third-party engine.
+- `e2e/a11y.spec.ts` runs axe's WCAG 2.2 A and AA rules on every screen and
+  dialog in light and dark mode. Keep it passing when adding UI.
+- Next.js adds its own hidden `role="alert"` region, so scope alert locators in
+  tests to the component under test.
 - When stopping a stray Next.js server, match it with `pkill -f "[n]ext-server"`
   so the pattern cannot match the shell running the command.

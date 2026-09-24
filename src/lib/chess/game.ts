@@ -61,7 +61,7 @@ export function replay(moves: readonly MoveInput[], startFen?: string): Chess {
 }
 
 /** Try a move on the given game. Returns the move, or null if it is illegal. Mutates `chess` on success. */
-export function tryMove(chess: Chess, input: MoveInput): Move | null {
+export function tryMove(chess: Chess, input: MoveInput | string): Move | null {
   try {
     return chess.move(input);
   } catch {
@@ -318,4 +318,25 @@ export function toPgn(
     chess.setHeader("Termination", "time forfeit");
   }
   return chess.pgn();
+}
+
+// Typed moves --------------------------------------------------------------
+
+export type TypedMoveResult = { ok: true; move: MoveInput; san: string } | { ok: false; error: string };
+
+/**
+ * Read a move typed by a player: SAN such as "Nf3" or "O-O", or coordinates
+ * such as "g1f3" or "e7e8q". A lowercase piece letter is accepted too, except
+ * "b", since "bxc3" is a pawn capture.
+ */
+export function parseTypedMove(chess: Chess, text: string): TypedMoveResult {
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: false, error: "Type a move first, such as e4 or Nf3." };
+  const attempts = [trimmed];
+  if (/^[nrqk][a-h1-8x]/.test(trimmed)) attempts.push(trimmed[0]!.toUpperCase() + trimmed.slice(1));
+  for (const attempt of attempts) {
+    const move = tryMove(new Chess(chess.fen()), attempt);
+    if (move) return { ok: true, move: toMoveInput(move), san: move.san };
+  }
+  return { ok: false, error: `${trimmed} is not a legal move here.` };
 }

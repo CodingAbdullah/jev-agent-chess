@@ -40,8 +40,12 @@ test("Stockfish shortlists moves and Jev picks one", async ({ page, isMobile }) 
   const rows = page.getByTestId("hybrid-shortlist").getByRole("listitem");
   expect(await rows.count()).toBeGreaterThanOrEqual(2);
   expect(await rows.count()).toBeLessThanOrEqual(5);
-  await expect(page.getByTestId("hybrid-shortlist")).toContainText(`${san} (played)`);
-  await expect(rows.first()).toContainText(/Stockfish [+-]?\d+\.\d\dJev \d+%/);
+  await expect(page.getByTestId("hybrid-shortlist").getByRole("listitem").filter({ hasText: "played" })).toContainText(
+    san!,
+  );
+  await expect(rows.first()).toContainText(/Jev \d+%/);
+  // Stockfish's scores are hints, so they stay hidden until the game ends.
+  await expect(page.getByTestId("hybrid-shortlist")).not.toContainText("Stockfish");
 });
 
 test("undo takes back the hybrid reply and your move", async ({ page, isMobile }) => {

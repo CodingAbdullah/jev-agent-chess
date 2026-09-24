@@ -110,6 +110,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           />
         </div>
 
+        <div className="flex items-center justify-between gap-4 pl-4">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="evaluation-computer-switch">Also during games against the computer</Label>
+            <p className="text-muted-foreground text-xs">
+              Off keeps hints hidden until the game ends, including Stockfish&apos;s evaluation and expected line.
+            </p>
+          </div>
+          <Switch
+            id="evaluation-computer-switch"
+            checked={settings.showEvaluation && settings.evaluationInComputerGames}
+            disabled={!settings.showEvaluation}
+            onCheckedChange={(evaluationInComputerGames) => updateSettings({ evaluationInComputerGames })}
+          />
+        </div>
+
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="coordinates-switch">Board coordinates</Label>
           <Switch

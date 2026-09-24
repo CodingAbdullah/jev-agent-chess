@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useChessGame, type MoveOutcome } from "@/hooks/use-chess-game";
 import { useAiOpponent, type Think } from "@/hooks/use-ai-opponent";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 import { useSettings } from "@/hooks/use-settings";
 import { useEvaluation, useStockfishEngine, type Evaluation } from "@/hooks/use-stockfish";
 import { findBoardTheme } from "@/lib/board-themes";
 import { findTimeControl, TIME_CONTROLS } from "@/lib/chess/clock";
+import { describeMove } from "@/lib/chess/describe";
 import {
   describeStatus,
   moveRows,
@@ -48,6 +50,7 @@ import { GameToolbar } from "./game-toolbar";
 import { ImportExportDialog, type ImportExportTab } from "./import-export-dialog";
 import { JevPanel } from "./jev-panel";
 import { MoveHistory } from "./move-history";
+import { MoveEntry } from "./move-entry";
 import { NewGameDialog, type GameSetup } from "./new-game-dialog";
 import { PlayerBar } from "./player-bar";
 import { SettingsDialog } from "./settings-dialog";
@@ -60,6 +63,7 @@ const orientationFor = (config: GameConfig) =>
 
 export function ChessApp() {
   const [settings, updateSettings] = useSettings();
+  const reducedMotion = usePrefersReducedMotion();
   // This component renders only in the browser, so saved settings are available on first render.
   const [initial] = useState(() => {
     const saved = getSettings();
@@ -153,7 +157,10 @@ export function ChessApp() {
     onMove: announceMove,
   });
 
-  const evaluation = useEvaluation({ enabled: settings.showEvaluation, fen: chess.fen(), gameOver });
+  // Against the computer, anything that hints at the best move stays hidden until the game ends.
+  const showAnalysis =
+    settings.showEvaluation && (!isAiGame(config) || gameOver || settings.evaluationInComputerGames);
+  const evaluation = useEvaluation({ enabled: showAnalysis, fen: chess.fen(), gameOver });
   const evalDisplay = describeEvaluation(evaluation, status);
 
   const handleMove = useCallback(
@@ -205,6 +212,9 @@ export function ChessApp() {
     if (timeoutKey && soundOn) playSound("gameEnd");
   }, [timeoutKey, soundOn]);
 
+  const lastMove = game.history.at(-1);
+  const lastMoveAnnouncement = lastMove ? `${names[lastMove.color]} played ${describeMove(lastMove)}.` : "";
+
   const bottomColor: Color = orientation === "white" ? "w" : "b";
   const topColor = opponent(bottomColor);
   const turn = chess.turn();
@@ -228,14 +238,14 @@ export function ChessApp() {
         <Button onClick={() => setDialog("new")}>New game</Button>
       </header>
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-4 p-4 sm:gap-6 sm:p-6 lg:grid-cols-[minmax(200px,260px)_minmax(0,640px)_minmax(240px,300px)] lg:items-start lg:justify-center">
+      <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-4 p-4 sm:gap-6 sm:p-6 lg:grid-cols-[minmax(200px,260px)_minmax(0,640px)_minmax(240px,300px)] xl:grid-cols-[minmax(220px,260px)_minmax(0,640px)_minmax(280px,340px)] lg:items-start lg:justify-center">
         <section
           aria-label="Board"
-          className="mx-auto flex w-full max-w-[640px] min-w-[280px] flex-col gap-2 lg:col-start-2 lg:row-start-1 lg:max-w-[min(640px,calc(100dvh_-_17rem))]"
+          className="mx-auto flex w-full max-w-[640px] min-w-[280px] flex-col gap-2 lg:col-start-2 lg:row-start-1 lg:max-w-[min(640px,calc(100dvh_-_20rem))]"
         >
           {playerBar(topColor)}
           <div className="flex items-stretch gap-1.5 sm:gap-2">
-            {settings.showEvaluation && (
+            {showAnalysis && (
               <EvalBar whiteShare={evalDisplay.share} label={evalDisplay.label} orientation={orientation} />
             )}
             <div className="min-w-0 flex-1">
@@ -248,6 +258,7 @@ export function ChessApp() {
                 darkSquareColor={boardTheme.dark}
                 showCoordinates={settings.showCoordinates}
                 positionKey={gameEndKey}
+                animate={!reducedMotion}
                 onMove={handleMove}
               />
             </div>
@@ -260,6 +271,17 @@ export function ChessApp() {
             onImportExport={() => openImportExport("export")}
             onSettings={() => setDialog("settings")}
           />
+          <MoveEntry
+            chess={chess}
+            enabled={!gameOver && humansTurn}
+            disabledReason={
+              gameOver ? "The game is over." : isAiGame(config) ? `${aiName(config)} is thinking…` : ""
+            }
+            onMove={handleMove}
+          />
+          <p className="sr-only" aria-live="polite" data-testid="move-announcement">
+            {lastMoveAnnouncement}
+          </p>
         </section>
 
         <aside className="mx-auto w-full max-w-[640px] lg:col-start-1 lg:row-start-1">
@@ -277,7 +299,7 @@ export function ChessApp() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <StatusLine status={status} names={names} />
-              {settings.showEvaluation && (
+              {showAnalysis && (
                 <p className="text-muted-foreground text-sm" data-testid="evaluation">
                   Evaluation{" "}
                   <span className="text-foreground font-semibold tabular-nums">{evalDisplay.text}</span>
@@ -315,6 +337,7 @@ export function ChessApp() {
               error={hybrid.error}
               decision={hybrid.lastDecision}
               gameOver={gameOver}
+              showScores={showAnalysis}
               onRetry={hybrid.retry}
             />
           )}
@@ -326,6 +349,7 @@ export function ChessApp() {
               error={stockfish.error}
               decision={stockfish.lastDecision}
               gameOver={gameOver}
+              showAnalysis={showAnalysis}
               onRetry={stockfish.retry}
             />
           )}

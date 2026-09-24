@@ -20,7 +20,8 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - A local fallback move, clearly labelled, when Jev fails or times out
 - Play against Stockfish at three difficulty levels, with its evaluation and expected line shown
 - Hybrid mode: Stockfish shortlists its five best moves, and Jev picks the one that fits its personality. A panel shows Stockfish's ranking and evaluations beside Jev's probabilities
-- An evaluation bar beside the board, from a background Stockfish analysis, which can be turned off
+- An evaluation bar beside the board, from a background Stockfish analysis. It shows in two-player games and after games against the computer, and hints stay hidden while you play the computer unless you turn them on
+- Keyboard play: type moves such as `e4`, `Nf3` or `e7e8q`, and moves are announced to screen readers in plain words
 - Local two-player games on one device
 - Move by clicking or by dragging pieces
 - Legal-move dots, capture rings, and last-move and check highlights
@@ -31,7 +32,8 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Undo, board flip, and a game-over dialog with rematch
 - FEN and PGN import and export, including copy and download
 - Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
-- Layouts for desktop and phone screens
+- Layouts for desktop and phone screens down to 360px, with reduced motion respected
+- Checked with axe for WCAG 2.2 AA problems in light and dark mode
 
 See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
 
@@ -61,6 +63,18 @@ TYPESAFE_API_KEY=your-key-here
 Without a key, the app uses a local mock that answers in Jev's format. The Jev
 panel marks those moves "Mock". Set `JEV_MOCK=1` to force the mock even when a
 key is set. The browser tests always do this.
+
+The route is rate limited per client address and overall, so a public site
+cannot drain the key's quota. The limits are set per minute:
+
+| Variable | Default | Limits |
+| --- | --- | --- |
+| `JEV_RATE_LIMIT_PER_MINUTE` | 30 | Requests from one address |
+| `JEV_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 | Requests from everyone together |
+
+The limiter keeps its counts in memory, which covers a single server. If you
+run several instances, use a shared store such as Redis, or your hosting
+platform's rate limiting, instead.
 
 Check the live connection with one real call:
 

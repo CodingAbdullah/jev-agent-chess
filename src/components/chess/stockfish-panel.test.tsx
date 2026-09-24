@@ -12,6 +12,7 @@ const base = {
   error: null,
   decision: null,
   gameOver: false,
+  showAnalysis: true,
   onRetry: () => {},
 };
 
@@ -42,6 +43,16 @@ describe("StockfishPanel", () => {
     expect(screen.getByTestId("stockfish-score")).toHaveTextContent("+0.34");
     expect(screen.getByTestId("stockfish-line")).toHaveTextContent("e5 Nf3 Nc6");
     expect(screen.getByText(/White is slightly better, at depth 8/)).toBeInTheDocument();
+  });
+
+  it("keeps the evaluation and expected line hidden during play", () => {
+    render(<StockfishPanel {...base} decision={decision} showAnalysis={false} />);
+    expect(screen.getByTestId("stockfish-played")).toHaveTextContent("e5");
+    expect(screen.queryByTestId("stockfish-score")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("stockfish-line")).not.toBeInTheDocument();
+    expect(screen.getByTestId("stockfish-analysis-hidden")).toHaveTextContent(
+      "Stockfish's evaluation and expected line appear when the game ends.",
+    );
   });
 
   it("links to Stockfish's licence and source", () => {

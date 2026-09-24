@@ -61,3 +61,16 @@ export async function preferLocalMode(page: Page) {
     }
   });
 }
+
+/** Play a move by typing it into the move box, the keyboard way to play. */
+export async function typeMove(page: Page, move: string) {
+  const box = page.getByRole("textbox", { name: "Type a move" });
+  await expect(box).toBeEnabled({ timeout: 15_000 });
+  await box.fill(move);
+  await box.press("Enter");
+}
+
+/** The current position, from the board's data attribute. */
+export async function currentFen(page: Page): Promise<string> {
+  return (await page.getByTestId("game-board").getAttribute("data-fen")) ?? "";
+}

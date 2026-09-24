@@ -20,6 +20,8 @@ export type Settings = {
   personality: PersonalityId;
   difficulty: DifficultyId;
   showEvaluation: boolean;
+  /** Show the evaluation, and Stockfish's view of the position, while playing the computer. */
+  evaluationInComputerGames: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   personality: "balanced",
   difficulty: "medium",
   showEvaluation: true,
+  evaluationInComputerGames: false,
 };
 
 const STORAGE_KEY = "jev-chess:settings";
@@ -66,6 +69,10 @@ function parse(raw: string | null): Settings {
       difficulty: isDifficulty(stored.difficulty) ? stored.difficulty : DEFAULT_SETTINGS.difficulty,
       showEvaluation:
         typeof stored.showEvaluation === "boolean" ? stored.showEvaluation : DEFAULT_SETTINGS.showEvaluation,
+      evaluationInComputerGames:
+        typeof stored.evaluationInComputerGames === "boolean"
+          ? stored.evaluationInComputerGames
+          : DEFAULT_SETTINGS.evaluationInComputerGames,
     };
   } catch {
     return DEFAULT_SETTINGS;

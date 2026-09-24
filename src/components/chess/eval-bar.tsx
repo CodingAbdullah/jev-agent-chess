@@ -29,7 +29,7 @@ export function EvalBar({ whiteShare, label, orientation, className }: EvalBarPr
     >
       <div
         className={cn(
-          "absolute inset-x-0 bg-neutral-100 transition-[height] duration-500 ease-out",
+          "absolute inset-x-0 bg-neutral-100 transition-[height] duration-500 ease-out motion-reduce:transition-none",
           orientation === "white" ? "bottom-0" : "top-0",
         )}
         style={{ height: `${share * 100}%` }}

@@ -19,7 +19,7 @@ function LoadingShell() {
       </header>
       <main className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-2 p-4 sm:p-6">
         <div className="h-12" />
-        <div className="bg-muted aspect-square w-full animate-pulse rounded-lg" />
+        <div className="bg-muted aspect-square w-full animate-pulse motion-reduce:animate-none rounded-lg" />
         <p className="sr-only">Loading the board…</p>
       </main>
     </div>

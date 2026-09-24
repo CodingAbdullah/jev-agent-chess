@@ -56,14 +56,27 @@ describe("ChessApp", () => {
     expect(screen.getByText("No moves yet.")).toBeInTheDocument();
   });
 
+  it("hides the evaluation during games against the computer", () => {
+    renderApp();
+    expect(screen.queryByTestId("eval-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("evaluation")).not.toBeInTheDocument();
+  });
+
+  it("shows the evaluation against the computer when that setting is on", () => {
+    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ evaluationInComputerGames: true }));
+    renderApp();
+    expect(screen.getByTestId("eval-bar")).toBeInTheDocument();
+  });
+
   it("explains that the evaluation is unavailable without Web Workers", async () => {
+    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ mode: "local" }));
     renderApp();
     expect(screen.getByTestId("eval-bar")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("evaluation")).toHaveTextContent("unavailable"));
   });
 
   it("hides the evaluation when it is turned off", () => {
-    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ showEvaluation: false }));
+    window.localStorage.setItem("jev-chess:settings", JSON.stringify({ mode: "local", showEvaluation: false }));
     renderApp();
     expect(screen.queryByTestId("eval-bar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("evaluation")).not.toBeInTheDocument();

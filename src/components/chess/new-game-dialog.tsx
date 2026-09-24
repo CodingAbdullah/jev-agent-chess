@@ -195,7 +195,7 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
               className="h-auto flex-col gap-0 py-2"
             >
               <span className="font-semibold">{option.label}</span>
-              <span className="text-muted-foreground text-[11px] font-normal">
+              <span className="text-foreground/70 text-[11px] font-normal">
                 {option.control ? option.category : "No clock"}
               </span>
             </ToggleGroupItem>

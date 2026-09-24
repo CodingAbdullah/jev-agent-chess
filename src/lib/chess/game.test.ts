@@ -12,6 +12,7 @@ import {
   moveRows,
   needsPromotion,
   parseGameText,
+  parseTypedMove,
   replay,
   resultToken,
   toPgn,
@@ -295,5 +296,43 @@ describe("describeStatus with player names", () => {
     expect(describeStatus({ kind: "checkmate", winner: "b" }, names)).toBe("Checkmate. Jev wins.");
     expect(describeStatus({ kind: "checkmate", winner: "w" }, names)).toBe("Checkmate. You win.");
     expect(describeStatus({ kind: "timeout", winner: "b" }, names)).toBe("You ran out of time. Jev wins.");
+  });
+});
+
+describe("parseTypedMove", () => {
+  it.each([
+    ["e4", "e4"],
+    ["e2e4", "e4"],
+    ["e2-e4", "e4"],
+    ["Nf3", "Nf3"],
+    ["nf3", "Nf3"],
+    ["g1f3", "Nf3"],
+    ["  Nc3 ", "Nc3"],
+  ])("reads %s as %s", (text, san) => {
+    expect(parseTypedMove(replay([]), text)).toMatchObject({ ok: true, san });
+  });
+
+  it("reads castling with letters or zeros", () => {
+    const chess = replay([], "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    expect(parseTypedMove(chess, "0-0")).toMatchObject({ ok: true, san: "O-O", move: { from: "e1", to: "g1" } });
+    expect(parseTypedMove(chess, "O-O-O")).toMatchObject({ ok: true, san: "O-O-O" });
+  });
+
+  it("reads promotions", () => {
+    const chess = replay([], "8/P6k/8/8/8/8/8/K7 w - - 0 1");
+    expect(parseTypedMove(chess, "a7a8n")).toMatchObject({ ok: true, move: { promotion: "n" } });
+    expect(parseTypedMove(chess, "a8=Q")).toMatchObject({ ok: true, move: { promotion: "q" } });
+  });
+
+  it("treats a lowercase b as a pawn move", () => {
+    const chess = replay(moves("b2-b4", "c7-c5"));
+    expect(parseTypedMove(chess, "bxc5")).toMatchObject({ ok: true, san: "bxc5" });
+  });
+
+  it("explains illegal or empty input without changing the game", () => {
+    const chess = replay([]);
+    expect(parseTypedMove(chess, "e5")).toEqual({ ok: false, error: "e5 is not a legal move here." });
+    expect(parseTypedMove(chess, " ")).toEqual({ ok: false, error: "Type a move first, such as e4 or Nf3." });
+    expect(chess.history()).toEqual([]);
   });
 });

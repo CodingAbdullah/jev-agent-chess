@@ -38,7 +38,7 @@ export function ChessClock({ clock, color, turn }: ChessClockProps) {
           ? low
             ? "bg-destructive text-white"
             : "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground",
+          : "bg-muted text-foreground",
         !running && ms === 0 && "text-destructive",
       )}
     >
