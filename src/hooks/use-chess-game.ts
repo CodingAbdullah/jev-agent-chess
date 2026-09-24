@@ -1,45 +1,102 @@
 "use client";
 
 import { Chess } from "chess.js";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { timeLeft, type TimeControl } from "@/lib/chess/clock";
 import {
+  capturedPieces,
   getStatus,
+  isGameOver,
+  materialBalance,
   replay,
+  toMoveInput,
   tryMove,
+  type LoadedGame,
   type Move,
   type MoveInput,
-  type PromotionPiece,
 } from "@/lib/chess/game";
+import { createGameState, gameReducer } from "@/lib/chess/game-state";
+
+export type MoveOutcome = { move: Move };
 
 /**
- * Local game state. The move list is the single source of truth, and the
- * chess.js instance is rebuilt from it, so undo and replay stay trivial later.
- * Treat the returned `chess` as read-only.
+ * Local game state. The reducer's move list is the single source of truth, and
+ * the chess.js instance is rebuilt from it. Treat the returned `chess` as read-only.
  */
-export function useChessGame() {
-  const [moves, setMoves] = useState<readonly MoveInput[]>([]);
+export function useChessGame(initialTimeControl: TimeControl | null) {
+  const [state, dispatch] = useReducer(gameReducer, initialTimeControl, createGameState);
 
-  const chess = useMemo(() => replay(moves), [moves]);
-  const status = useMemo(() => getStatus(chess), [chess]);
-  const lastMove = useMemo<Move | null>(
-    () => chess.history({ verbose: true }).at(-1) ?? null,
-    [chess],
-  );
+  const moves = useMemo(() => state.plies.map((ply) => ply.move), [state.plies]);
+  const chess = useMemo(() => replay(moves, state.startFen), [moves, state.startFen]);
+  const history = useMemo(() => chess.history({ verbose: true }), [chess]);
+  const status = useMemo(() => getStatus(chess, state.flagged), [chess, state.flagged]);
+  const captured = useMemo(() => capturedPieces(history), [history]);
+  const material = useMemo(() => materialBalance(chess), [chess]);
+  const gameOver = isGameOver(status);
+  const { clock } = state;
+
+  // Flag the side to move at the exact moment its clock reaches zero.
+  useEffect(() => {
+    if (!clock || clock.runningSince === null || gameOver) return;
+    const turn = chess.turn();
+    const remaining = timeLeft(clock, turn, turn, Date.now());
+    const timer = setTimeout(
+      () => dispatch({ type: "flag", color: turn, at: Date.now() }),
+      remaining,
+    );
+    return () => clearTimeout(timer);
+  }, [clock, chess, gameOver]);
 
   const makeMove = useCallback(
-    (input: MoveInput): boolean => {
-      if (status.kind !== "playing") return false;
-      const move = tryMove(new Chess(chess.fen()), input);
-      if (!move) return false;
-      const played: MoveInput = { from: move.from, to: move.to };
-      if (move.promotion) played.promotion = move.promotion as PromotionPiece;
-      setMoves([...moves, played]);
-      return true;
+    (input: MoveInput): MoveOutcome | null => {
+      if (gameOver) return null;
+      const now = Date.now();
+      const mover = chess.turn();
+      if (clock && timeLeft(clock, mover, mover, now) <= 0) {
+        dispatch({ type: "flag", color: mover, at: now });
+        return null;
+      }
+      // Replay rather than copy the FEN, so repetition counts carry over.
+      const next = replay(moves, state.startFen);
+      const move = tryMove(next, input);
+      if (!move) return null;
+      dispatch({ type: "move", move: toMoveInput(move), endsGame: next.isGameOver(), at: now });
+      return { move };
     },
-    [chess, moves, status.kind],
+    [chess, clock, gameOver, moves, state.startFen],
   );
 
-  const reset = useCallback(() => setMoves([]), []);
+  const undo = useCallback(() => dispatch({ type: "undo", at: Date.now() }), []);
 
-  return { chess, status, lastMove, moveCount: moves.length, makeMove, reset };
+  const newGame = useCallback(
+    (timeControl: TimeControl | null) => dispatch({ type: "new", timeControl }),
+    [],
+  );
+
+  const loadGame = useCallback((game: LoadedGame, timeControl: TimeControl | null) => {
+    const firstToMove = new Chess(game.startFen).turn();
+    dispatch({ type: "load", game, firstToMove, timeControl });
+  }, []);
+
+  return {
+    chess,
+    history,
+    status,
+    gameOver,
+    captured,
+    material,
+    clock,
+    timeControl: state.timeControl,
+    startFen: state.startFen,
+    moves,
+    revision: state.revision,
+    gameId: state.gameId,
+    canUndo: moves.length > 0,
+    makeMove,
+    undo,
+    newGame,
+    loadGame,
+  };
 }
+
+export type ChessGame = ReturnType<typeof useChessGame>;

@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  capturedPieces,
   describeStatus,
   getStatus,
+  hasMatingMaterial,
   isOwnPiece,
   isSquare,
   kingSquare,
   legalMovesFrom,
+  materialBalance,
+  moveRows,
   needsPromotion,
+  parseGameText,
   replay,
+  resultToken,
+  toPgn,
   tryMove,
   type MoveInput,
 } from "./game";
@@ -140,5 +147,143 @@ describe("helpers", () => {
     expect(isSquare("h8")).toBe(true);
     expect(isSquare("i1")).toBe(false);
     expect(isSquare(null)).toBe(false);
+  });
+});
+
+describe("timeouts", () => {
+  it("awards the win to the opponent when they can still mate", () => {
+    const status = getStatus(replay([]), "w");
+    expect(status).toEqual({ kind: "timeout", winner: "b" });
+    expect(describeStatus(status)).toBe("White ran out of time. Black wins.");
+    expect(resultToken(status)).toBe("0-1");
+  });
+
+  it("is a draw when the opponent has only a king and a knight", () => {
+    const chess = replay([], "4k3/8/8/8/8/8/3PN3/4K3 w - - 0 1");
+    expect(getStatus(chess, "b")).toEqual({ kind: "timeout", winner: "w" });
+    const knightOnly = replay([], "4k3/8/8/8/8/8/4N3/4K3 w - - 0 1");
+    expect(getStatus(knightOnly, "b")).toEqual({
+      kind: "draw",
+      reason: "timeout-vs-insufficient-material",
+    });
+  });
+
+  it("lets checkmate stand even if a flag arrives", () => {
+    const mated = replay(moves("f2-f3", "e7-e5", "g2-g4", "d8-h4"));
+    expect(getStatus(mated, "b")).toEqual({ kind: "checkmate", winner: "b" });
+  });
+});
+
+describe("hasMatingMaterial", () => {
+  it.each([
+    ["4k3/8/8/8/8/8/8/4K3 w - - 0 1", false],
+    ["4k3/8/8/8/8/8/4B3/4K3 w - - 0 1", false],
+    ["4k3/8/8/8/8/8/3BN3/4K3 w - - 0 1", true],
+    ["4k3/8/8/8/8/8/4R3/4K3 w - - 0 1", true],
+    ["4k3/8/8/8/8/8/4P3/4K3 w - - 0 1", true],
+  ])("%s gives White mating material: %s", (fen, expected) => {
+    expect(hasMatingMaterial(replay([], fen), "w")).toBe(expected);
+  });
+});
+
+describe("material", () => {
+  it("is balanced at the start", () => {
+    expect(materialBalance(replay([]))).toBe(0);
+  });
+
+  it("tracks captures and the material lead", () => {
+    // 1. e4 d5 2. exd5 Qxd5 3. Nc3 Qxa2 4. Rxa2
+    const chess = replay(moves("e2-e4", "d7-d5", "e4-d5", "d8-d5", "b1-c3", "d5-a2", "a1-a2"));
+    expect(capturedPieces(chess.history({ verbose: true }))).toEqual({ w: ["p", "q"], b: ["p", "p"] });
+    expect(materialBalance(chess)).toBe(8);
+  });
+});
+
+describe("moveRows", () => {
+  it("numbers moves in pairs", () => {
+    const rows = moveRows(replay(moves("e2-e4", "e7-e5", "g1-f3")).history({ verbose: true }));
+    expect(rows).toEqual([
+      { number: 1, white: { san: "e4", ply: 0 }, black: { san: "e5", ply: 1 } },
+      { number: 2, white: { san: "Nf3", ply: 2 } },
+    ]);
+  });
+
+  it("starts with an empty White slot when Black moves first", () => {
+    const chess = replay(moves("e8-d7", "e1-d1"), "4k3/8/8/8/8/8/4P3/4K3 b - - 0 12");
+    expect(moveRows(chess.history({ verbose: true }))).toEqual([
+      { number: 12, black: { san: "Kd7", ply: 0 } },
+      { number: 13, white: { san: "Kd1", ply: 1 } },
+    ]);
+  });
+
+  it("is empty with no moves", () => {
+    expect(moveRows([])).toEqual([]);
+  });
+});
+
+describe("parseGameText", () => {
+  it("reads a FEN position", () => {
+    const fen = "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1";
+    expect(parseGameText(`  ${fen}\n`)).toEqual({ ok: true, format: "fen", game: { startFen: fen, moves: [] } });
+  });
+
+  it("treats the standard starting FEN as a fresh game", () => {
+    expect(parseGameText("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")).toEqual({
+      ok: true,
+      format: "fen",
+      game: { startFen: undefined, moves: [] },
+    });
+  });
+
+  it("reports an invalid FEN", () => {
+    const result = parseGameText("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w XYZ - 0 1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/FEN is not valid/);
+  });
+
+  it("reads a PGN game", () => {
+    const result = parseGameText('[Event "Test"]\n\n1. e4 e5 2. Nf3 *');
+    expect(result).toEqual({
+      ok: true,
+      format: "pgn",
+      game: { startFen: undefined, moves: moves("e2-e4", "e7-e5", "g1-f3") },
+    });
+  });
+
+  it("reads a PGN that starts from a custom position", () => {
+    const pgn = '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/4P3/4K3 b - - 0 10"]\n\n10... Kd7 *';
+    const result = parseGameText(pgn);
+    expect(result.ok && result.game).toEqual({
+      startFen: "4k3/8/8/8/8/8/4P3/4K3 b - - 0 10",
+      moves: moves("e8-d7"),
+    });
+  });
+
+  it("reports an illegal PGN", () => {
+    const result = parseGameText("1. e4 e5 2. Qxf7");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/PGN could not be read/);
+  });
+
+  it("asks for input when empty", () => {
+    expect(parseGameText("   ")).toEqual({ ok: false, error: "Paste a FEN position or a PGN game first." });
+  });
+});
+
+describe("toPgn", () => {
+  it("exports headers, moves and the result, and round-trips", () => {
+    const game = { moves: moves("f2-f3", "e7-e5", "g2-g4", "d8-h4") };
+    const pgn = toPgn(game, { kind: "checkmate", winner: "b" }, { date: new Date(2026, 8, 24) });
+    expect(pgn).toContain('[Date "2026.09.24"]');
+    expect(pgn).toContain('[Result "0-1"]');
+    expect(pgn).toContain("1. f3 e5 2. g4 Qh4# 0-1");
+    const reread = parseGameText(pgn);
+    expect(reread.ok && reread.game).toEqual({ startFen: undefined, moves: game.moves });
+  });
+
+  it("marks time forfeits", () => {
+    const pgn = toPgn({ moves: moves("e2-e4") }, { kind: "timeout", winner: "w" });
+    expect(pgn).toContain('[Termination "time forfeit"]');
+    expect(pgn).toContain('[Result "1-0"]');
   });
 });

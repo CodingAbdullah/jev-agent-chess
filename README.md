@@ -18,7 +18,12 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Legal-move dots, capture rings, and last-move and check highlights
 - Castling, en passant, and promotion with a piece picker
 - Checkmate and every draw rule: stalemate, insufficient material, threefold repetition and the fifty-move rule
-- New game at any time
+- Chess clocks from bullet to classical, with increments and loss on time
+- Move history, captured pieces and the material lead
+- Undo, board flip, and a game-over dialog with rematch
+- FEN and PGN import and export, including copy and download
+- Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
+- Layouts for desktop and phone screens
 
 Jev and Stockfish opponents arrive in later build phases.
 
@@ -67,11 +72,11 @@ npx shadcn@latest add dialog
 
 ```
 src/app/               pages, layouts and global styles
-src/components/chess/  board, promotion picker and game screen
+src/components/chess/  game screen, board, clocks, move list and dialogs
 src/components/ui/     shadcn/ui components
 src/hooks/             React hooks, including the game state hook
-src/lib/chess/         chess rules and game status helpers, free of React
-src/lib/               shared helpers
+src/lib/chess/         rules, clocks and game state reducer, free of React
+src/lib/               settings, sounds, board themes and shared helpers
 e2e/                   Playwright tests
 ```
 

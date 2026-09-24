@@ -1,26 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const square = (page: Page, name: string) => page.locator(`[data-square="${name}"]`);
-const pieceOn = (page: Page, name: string) => square(page, name).locator("[data-piece]");
-const status = (page: Page) => page.getByTestId("game-status");
-
-/** Click or tap a square, whichever matches the device. */
-async function press(page: Page, name: string, isMobile: boolean) {
-  if (isMobile) await square(page, name).tap();
-  else await square(page, name).click();
-}
-
-/** Play moves like "e2e4" by pressing the source then the target, waiting for each to land. */
-async function play(page: Page, isMobile: boolean, ...moves: string[]) {
-  for (const move of moves) {
-    const from = move.slice(0, 2);
-    const to = move.slice(2, 4);
-    await press(page, from, isMobile);
-    await press(page, to, isMobile);
-    await expect(pieceOn(page, from)).toHaveCount(0);
-    await expect(pieceOn(page, to)).toHaveCount(1);
-  }
-}
+import { expect, test } from "@playwright/test";
+import { drag, pieceOn, play, press, status } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -47,24 +26,6 @@ test("does not let a player move the opponent's pieces", async ({ page, isMobile
   await expect(pieceOn(page, "e7")).toHaveAttribute("data-piece", "bP");
   await expect(status(page)).toHaveText("White to move.");
 });
-
-/**
- * Drag a piece with the mouse from one square to another.
- *
- * After a drag ends, dnd-kit (react-chessboard's drag library) swallows clicks
- * for 50ms so the drop is not also read as a click. People never click that
- * fast, but Playwright does, so pause briefly like a person would.
- */
-async function drag(page: Page, fromName: string, toName: string) {
-  const from = await square(page, fromName).boundingBox();
-  const to = await square(page, toName).boundingBox();
-  if (!from || !to) throw new Error("Board squares are not visible");
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
-  await page.mouse.up();
-  await page.waitForTimeout(100);
-}
 
 test("moves a piece by dragging", async ({ page, isMobile }) => {
   test.skip(isMobile, "Mouse drag does not apply to touch devices.");
@@ -139,25 +100,34 @@ test("announces check", async ({ page, isMobile }) => {
   await expect(page.getByText("Check", { exact: true })).toBeVisible();
 });
 
-test("ends the game on checkmate and starts a new one", async ({ page, isMobile }) => {
+test("ends the game on checkmate and offers a rematch", async ({ page, isMobile }) => {
   await play(page, isMobile, "f2f3", "e7e5", "g2g4", "d8h4");
   await expect(status(page)).toHaveText("Checkmate. Black wins.");
+
+  const gameOver = page.getByRole("dialog", { name: "Checkmate" });
+  await expect(gameOver).toBeVisible();
+  await expect(gameOver).toContainText("0-1");
+  await gameOver.getByRole("button", { name: "View board" }).click();
+  await expect(gameOver).toBeHidden();
 
   // No more moves are allowed once the game is over.
   await press(page, "a2", isMobile);
   await press(page, "a3", isMobile);
   await expect(pieceOn(page, "a2")).toHaveAttribute("data-piece", "wP");
 
-  await page.getByRole("button", { name: "Play again" }).click();
+  // Undo takes the mate back and play continues.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(status(page)).toHaveText("Black to move.");
+  await play(page, isMobile, "d8h4");
+  await gameOver.getByRole("button", { name: "Rematch" }).click();
   await expect(status(page)).toHaveText("White to move.");
   await expect(pieceOn(page, "d8")).toHaveAttribute("data-piece", "bQ");
 });
 
-test("New game resets the board mid-game", async ({ page, isMobile }) => {
-  const newGame = page.getByRole("button", { name: "New game" });
-  await expect(newGame).toBeDisabled();
+test("New game starts over mid-game", async ({ page, isMobile }) => {
   await play(page, isMobile, "e2e4");
-  await newGame.click();
+  await page.getByRole("button", { name: "New game" }).click();
+  await page.getByRole("dialog", { name: "New game" }).getByRole("button", { name: "Start game" }).click();
   await expect(pieceOn(page, "e2")).toHaveAttribute("data-piece", "wP");
   await expect(status(page)).toHaveText("White to move.");
 });

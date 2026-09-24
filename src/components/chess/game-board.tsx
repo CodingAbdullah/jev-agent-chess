@@ -36,18 +36,27 @@ type GameBoardProps = {
   /** When false, pieces cannot be selected or dragged. */
   interactive: boolean;
   orientation?: "white" | "black";
+  lightSquareColor: string;
+  darkSquareColor: string;
+  showCoordinates: boolean;
+  /** Changes whenever the game changes, including undo back to an earlier position. */
+  positionKey: string;
   /** Returns true when the move was accepted. */
   onMove: (move: MoveInput) => boolean;
 };
 
-/** Selection and pending promotion are tagged with the position they belong to, so they reset on any move. */
-type Tagged<T> = { fen: string; value: T };
+/** Selection and pending promotion are tagged with the position they belong to, so they reset on any change. */
+type Tagged<T> = { key: string; value: T };
 
 export function GameBoard({
   chess,
   lastMove,
   interactive,
   orientation = "white",
+  lightSquareColor,
+  darkSquareColor,
+  showCoordinates,
+  positionKey,
   onMove,
 }: GameBoardProps) {
   const fen = chess.fen();
@@ -56,8 +65,8 @@ export function GameBoard({
     null,
   );
 
-  const selected = interactive && selection?.fen === fen ? selection.value : null;
-  const pendingPromotion = interactive && promotion?.fen === fen ? promotion.value : null;
+  const selected = interactive && selection?.key === positionKey ? selection.value : null;
+  const pendingPromotion = interactive && promotion?.key === positionKey ? promotion.value : null;
 
   const targets = useMemo(
     () => (selected ? legalMovesFrom(chess, selected) : []),
@@ -65,8 +74,8 @@ export function GameBoard({
   );
 
   const select = useCallback((square: Square | null) => {
-    setSelection(square ? { fen, value: square } : null);
-  }, [fen]);
+    setSelection(square ? { key: positionKey, value: square } : null);
+  }, [positionKey]);
 
   /**
    * Play a move, or open the promotion picker first. Returns true only when the
@@ -77,12 +86,12 @@ export function GameBoard({
     (from: Square, to: Square): boolean => {
       select(null);
       if (needsPromotion(chess, from, to)) {
-        setPromotion({ fen, value: { from, to } });
+        setPromotion({ key: positionKey, value: { from, to } });
         return false;
       }
       return onMove({ from, to });
     },
-    [chess, fen, onMove, select],
+    [chess, positionKey, onMove, select],
   );
 
   const handleSquareClick = ({ square }: SquareHandlerArgs) => {
@@ -164,6 +173,11 @@ export function GameBoard({
           position: fen,
           boardOrientation: orientation,
           squareStyles,
+          lightSquareStyle: { backgroundColor: lightSquareColor },
+          darkSquareStyle: { backgroundColor: darkSquareColor },
+          lightSquareNotationStyle: { color: darkSquareColor },
+          darkSquareNotationStyle: { color: lightSquareColor },
+          showNotation: showCoordinates,
           allowDragging: interactive,
           allowDrawingArrows: true,
           animationDurationInMs: 200,

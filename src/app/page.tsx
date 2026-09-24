@@ -1,5 +1,5 @@
-import { ChessApp } from "@/components/chess/chess-app";
+import { ChessAppLoader } from "@/components/chess/chess-app-loader";
 
 export default function Home() {
-  return <ChessApp />;
+  return <ChessAppLoader />;
 }
