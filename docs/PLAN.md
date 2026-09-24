@@ -60,6 +60,10 @@ browser tests all passing, then one commit pushed to the working branch.
      The Playwright config already sets `JEV_MOCK=1` and lifts rate limits, so
      no secrets are needed. Upload the Playwright report when tests fail.
    - A `docker build` of the image, so Dockerfile breakage is caught.
+   - Syntax checks of the setup scripts: `bash -n scripts/setup.sh` and
+     `shellcheck`, and `Invoke-ScriptAnalyzer` (PSScriptAnalyzer) on
+     `scripts/setup.ps1` with `pwsh`. GitHub's Ubuntu runners include
+     ShellCheck, PowerShell and PSScriptAnalyzer. Both scripts pass today.
    - Never give pull requests from forks access to `TYPESAFE_API_KEY`.
 6. **Publish a prebuilt Docker image to GitHub's registry (GHCR).** Add
    `.github/workflows/docker-publish.yml`:
@@ -87,7 +91,7 @@ browser tests all passing, then one commit pushed to the working branch.
      to npm by mistake.
    - Describe these steps in `CONTRIBUTING.md` for future maintainers.
 8. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
-   Node 22 and `.env.example`; that no API key is needed thanks to the mock;
+   Node 22 and the setup scripts (or `.env.example` by hand); that no API key is needed thanks to the mock;
    the scripts to run before opening a pull request; keeping the axe
    accessibility tests passing; never committing keys; and that contributions
    are accepted under GPL-3.0-or-later. Link it from the README.
@@ -162,6 +166,19 @@ browser tests all passing, then one commit pushed to the working branch.
 - **The project is licensed GPL-3.0-or-later**, switched from MIT in phase 7 at
   the owner's request, because it ships Stockfish, which is GPL-3.0. Anyone who
   distributes the app must offer its source under the GPL.
+- **Setup scripts, done:** `scripts/setup.sh` for macOS and Linux and
+  `scripts/setup.ps1` for Windows PowerShell 5.1 and PowerShell 7 behave the
+  same way. `local` writes `.env.local` and `docker` writes `.env`, each
+  copied from `.env.example` if missing, keeping other settings when the file
+  exists. The key is read at a hidden prompt, never as an argument, so it
+  stays out of shell history and process lists; empty means the mock. Keys
+  with spaces, `#`, `$`, quotes or backslashes are refused, since env files
+  cannot hold them as typed. `--start` / `-Start` installs and runs
+  `npm run dev`, or runs `docker compose up --build -d` and waits for the
+  page. `cloud` and `vercel` only print the steps, because those keys are
+  set in the Claude and Vercel settings, which no repository script can reach.
+  `.gitattributes` keeps `.sh` files on LF so they run after a Windows
+  checkout.
 - **No npm package for the app.** It is a whole web app, not a library, so
   it is shared as a prebuilt Docker image on GHCR, the Deploy to Vercel
   button, and the source for anyone who wants to modify it. Parts such as
@@ -237,6 +254,8 @@ browser tests all passing, then one commit pushed to the working branch.
   dependency stage installs with `--ignore-scripts`, and `npm run build` then
   copies the Stockfish engine in its prebuild step. The image runs as `node`,
   has a health check, and holds no secrets.
+- `scripts/setup.sh` and `scripts/setup.ps1`: the setup scripts described
+  under design decisions. `.gitattributes` keeps `.sh` files on LF.
 - The board exposes the current position as `data-fen`, which the full-game
   browser tests read to choose legal moves.
 
@@ -309,5 +328,11 @@ console.log(response.answers.category.choice);
   need `--network host`, the sandbox CA as a build secret and the proxy passed
   in. Use a scratch copy of the Dockerfile for that; never commit those
   workarounds.
+- PowerShell is not installed in the cloud environment. To test
+  `scripts/setup.ps1`, download the Linux `powershell-7.x-linux-x64.tar.gz`
+  from GitHub releases into the scratchpad and run it with `-File`. Test the
+  Docker start path with a scratch Compose override passed in `COMPOSE_FILE`
+  that points at the scratch Dockerfile, so the script itself runs unchanged.
+- When changing either setup script, change the other to match.
 - When stopping a stray Next.js server, match it with `pkill -f "[n]ext-server"`
   so the pattern cannot match the shell running the command.

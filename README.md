@@ -50,6 +50,37 @@ npm run dev
 
 Then open http://localhost:3000.
 
+### Setup script
+
+The setup script checks your tools, creates the right env file, asks for your
+TypeSafe key at a hidden prompt, and can start the app. Press Enter at the key
+prompt to play against the mock Jev.
+
+```bash
+./scripts/setup.sh            # macOS and Linux
+```
+
+```powershell
+.\scripts\setup.ps1           # Windows PowerShell 5.1 or PowerShell 7
+```
+
+Choose how to run it, or name it directly:
+
+| Command | What it does |
+| --- | --- |
+| `setup local` | Writes `.env.local` for `npm run dev` |
+| `setup docker` | Writes `.env` for `docker compose` |
+| `setup cloud` | Shows how to add the key to a Claude Code cloud environment |
+| `setup vercel` | Shows how to add the key to Vercel |
+
+Add `--start` (`-Start` in PowerShell) to install and start the app straight
+away. The key is never taken as a command-line argument, so it stays out of
+your shell history, and it is written only to the git-ignored env file. Run
+the script again to change the key; other settings in the file are kept.
+
+If Windows blocks the script, run
+`powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1`.
+
 ## Connecting Jev
 
 The app reads your TypeSafe API key from the `TYPESAFE_API_KEY` environment
@@ -59,7 +90,8 @@ variable on the server. The key is never sent to the browser. Never commit it.
 cp .env.example .env.local   # then add your key; git ignores .env.local
 ```
 
-`.env.example` lists every setting the app reads.
+Or run the [setup script](#setup-script), which does this and asks for the key
+without showing it. `.env.example` lists every setting the app reads.
 
 Without a key, the app uses a local mock that answers in Jev's format. The Jev
 panel marks those moves "Mock". Set `JEV_MOCK=1` to force the mock even when a
@@ -191,7 +223,7 @@ src/lib/jev/           Jev prompt, move selection, mock, fallback and route vali
 src/app/api/jev/move/  the server route that calls Jev
 src/lib/stockfish/     UCI parsing, the Web Worker engine wrapper and Stockfish's move choice
 src/lib/hybrid.ts      hybrid mode: Stockfish's shortlist, then Jev's choice
-scripts/               engine copy step and the live Jev smoke test
+scripts/               engine copy step, live Jev smoke test and setup scripts
 src/lib/               settings, sounds, board themes and shared helpers
 e2e/                   Playwright tests
 ```
