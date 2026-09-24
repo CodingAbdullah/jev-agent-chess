@@ -25,7 +25,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
 - Layouts for desktop and phone screens
 
-Jev and Stockfish opponents arrive in later build phases.
+Jev and Stockfish opponents arrive in later build phases. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
 
 ## Requirements
 
