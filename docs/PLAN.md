@@ -48,7 +48,20 @@ browser tests all passing, then one commit pushed to the working branch.
    The current limiter is in memory, so each server instance counts on its own.
 3. **Deployment:** the owner deploys to Vercel and publishes the project as
    open source. Docker support lets anyone self-host.
-4. **Ideas not yet built:** resign and draw offers, a review mode for stepping
+4. **Continuous integration for contributors.** Add a GitHub Actions workflow
+   that runs on every pull request and on pushes to `main`:
+   - `npm ci`, then `npm run check` (lint, type checks, unit tests).
+   - `npx playwright install --with-deps chromium`, then `npm run test:e2e`.
+     The Playwright config already sets `JEV_MOCK=1` and lifts rate limits, so
+     no secrets are needed. Upload the Playwright report when tests fail.
+   - A `docker build` of the image, so Dockerfile breakage is caught.
+   - Never give pull requests from forks access to `TYPESAFE_API_KEY`.
+5. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
+   Node 22 and `.env.example`; that no API key is needed thanks to the mock;
+   the scripts to run before opening a pull request; keeping the axe
+   accessibility tests passing; never committing keys; and that contributions
+   are accepted under GPL-3.0-or-later. Link it from the README.
+6. **Ideas not yet built:** resign and draw offers, a review mode for stepping
    through finished games, and a Jev score question for the evaluation bar in
    Jev games.
 
