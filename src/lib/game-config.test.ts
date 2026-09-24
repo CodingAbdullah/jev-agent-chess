@@ -33,4 +33,18 @@ describe("game config", () => {
     expect(pgnNames(config)).toEqual({ w: "Player", b: "Stockfish (Easy)" });
     expect(modeLabel(config)).toBe("vs Stockfish");
   });
+
+  it("builds a hybrid game", () => {
+    const config = configFromSettings({
+      ...DEFAULT_SETTINGS,
+      mode: "hybrid",
+      playerColor: "b",
+      personality: "aggressive",
+      difficulty: "medium",
+    });
+    expect(config).toEqual({ mode: "hybrid", humanColor: "b", personality: "aggressive", difficulty: "medium" });
+    expect(playerNames(config)).toEqual({ w: "Jev + Stockfish", b: "You" });
+    expect(pgnNames(config)).toEqual({ w: "Jev + Stockfish (Aggressive, Medium)", b: "Player" });
+    expect(modeLabel(config)).toBe("Hybrid");
+  });
 });

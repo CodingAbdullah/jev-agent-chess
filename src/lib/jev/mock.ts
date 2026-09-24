@@ -43,6 +43,14 @@ function scoreDescription(description: string, style: string): number {
   if (/^pawn from [a-h][27] to [de][45]/.test(text)) score += 1.2;
   if (/^pawn from [a-h][27] to [cf][45]/.test(text)) score += 0.3;
   if (text.startsWith("king from")) score -= 1;
+
+  // Hybrid mode: Stockfish's notes. Its evaluation dominates; personality only tips the balance.
+  const evaluation = /stockfish evaluation for you: ([+-]\d+(?:\.\d+)?) pawns/.exec(text);
+  if (evaluation) score += Math.max(-10, Math.min(10, Number(evaluation[1]))) * 2;
+  if (text.includes("stockfish sees mate in")) score += 50;
+  if (text.includes("getting mated")) score -= 50;
+  const rank = /stockfish's choice #(\d+)/.exec(text);
+  if (rank) score += Math.max(0, 5 - Number(rank[1])) * 0.2;
   return score;
 }
 

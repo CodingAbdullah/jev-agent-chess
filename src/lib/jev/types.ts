@@ -3,6 +3,7 @@
  * Nothing here may touch the API key or the SDK client.
  */
 import type { MoveInput } from "@/lib/chess/game";
+import type { Score } from "@/lib/stockfish/uci";
 
 export const PERSONALITIES = [
   { id: "balanced", label: "Balanced", description: "Plays the move it judges strongest." },
@@ -35,6 +36,16 @@ export const personalityLabel = (id: PersonalityId) =>
 export const difficultyLabel = (id: DifficultyId) =>
   DIFFICULTIES.find((option) => option.id === id)!.label;
 
+/** A move Stockfish shortlisted for hybrid mode. */
+export type StockfishCandidate = {
+  /** The move in UCI notation, such as "e2e4". */
+  uci: string;
+  /** Stockfish's evaluation after this move, from White's side. */
+  score: Score;
+  /** The line Stockfish expects, in SAN, starting with this move. */
+  line: string[];
+};
+
 /** What the browser sends to the Jev route. */
 export type JevMoveRequest = {
   fen: string;
@@ -42,6 +53,8 @@ export type JevMoveRequest = {
   history: string[];
   personality: PersonalityId;
   difficulty: DifficultyId;
+  /** Hybrid mode: Jev chooses only among these, best first. */
+  candidates?: StockfishCandidate[];
 };
 
 export type MoveProbability = { san: string; probability: number };

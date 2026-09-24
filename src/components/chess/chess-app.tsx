@@ -32,6 +32,7 @@ import {
   playerNames,
   type GameConfig,
 } from "@/lib/game-config";
+import { hybridMove, type HybridMove } from "@/lib/hybrid";
 import { requestJevMove } from "@/lib/jev/api";
 import type { JevMoveResponse } from "@/lib/jev/types";
 import { getSettings } from "@/lib/settings";
@@ -42,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { EvalBar } from "./eval-bar";
 import { GameBoard } from "./game-board";
 import { GameOverDialog } from "./game-over-dialog";
+import { HybridPanel } from "./hybrid-panel";
 import { GameToolbar } from "./game-toolbar";
 import { ImportExportDialog, type ImportExportTab } from "./import-export-dialog";
 import { JevPanel } from "./jev-panel";
@@ -115,7 +117,8 @@ export function ChessApp() {
     onMove: announceMove,
   });
 
-  const getOpponentEngine = useStockfishEngine(config.mode === "stockfish");
+  // Stockfish and hybrid games share one engine worker for the computer's moves.
+  const getOpponentEngine = useStockfishEngine(config.mode === "stockfish" || config.mode === "hybrid");
   const stockfishThink = useCallback<Think<StockfishMove>>(
     async (position, signal) => {
       if (config.mode !== "stockfish") throw new Error("Stockfish is not playing this game.");
@@ -127,6 +130,26 @@ export function ChessApp() {
     color: config.mode === "stockfish" ? computerColor : null,
     game,
     think: stockfishThink,
+    onMove: announceMove,
+  });
+
+  const hybridThink = useCallback<Think<HybridMove>>(
+    async (position, signal) => {
+      if (config.mode !== "hybrid") throw new Error("Hybrid mode is not playing this game.");
+      return hybridMove({
+        engine: getOpponentEngine(),
+        ...position,
+        personality: config.personality,
+        difficulty: config.difficulty,
+        signal,
+      });
+    },
+    [config, getOpponentEngine],
+  );
+  const hybrid = useAiOpponent({
+    color: config.mode === "hybrid" ? computerColor : null,
+    game,
+    think: hybridThink,
     onMove: announceMove,
   });
 
@@ -281,6 +304,18 @@ export function ChessApp() {
               decision={jev.lastDecision}
               gameOver={gameOver}
               onRetry={jev.retry}
+            />
+          )}
+          {config.mode === "hybrid" && computerColor && (
+            <HybridPanel
+              aiColor={computerColor}
+              personality={config.personality}
+              difficulty={config.difficulty}
+              thinking={hybrid.thinking}
+              error={hybrid.error}
+              decision={hybrid.lastDecision}
+              gameOver={gameOver}
+              onRetry={hybrid.retry}
             />
           )}
           {config.mode === "stockfish" && computerColor && (

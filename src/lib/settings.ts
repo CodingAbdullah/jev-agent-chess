@@ -2,9 +2,9 @@ import { DEFAULT_BOARD_THEME_ID } from "./board-themes";
 import { DEFAULT_TIME_CONTROL_ID } from "./chess/clock";
 import { isDifficulty, isPersonality, type DifficultyId, type PersonalityId } from "./jev/types";
 
-export type GameMode = "local" | "jev" | "stockfish";
+export type GameMode = "local" | "jev" | "stockfish" | "hybrid";
 
-const GAME_MODES: readonly GameMode[] = ["local", "jev", "stockfish"];
+const GAME_MODES: readonly GameMode[] = ["local", "jev", "stockfish", "hybrid"];
 export type ColorChoice = "w" | "b" | "random";
 
 /** Per-device preferences. Light and dark mode are handled separately by next-themes. */

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TIME_CONTROLS } from "@/lib/chess/clock";
 import { DIFFICULTIES, PERSONALITIES, type DifficultyId } from "@/lib/jev/types";
+import { HYBRID_LEVELS, SHORTLIST_SIZE } from "@/lib/hybrid";
 import { STOCKFISH_LEVELS } from "@/lib/stockfish/uci";
 import type { Settings } from "@/lib/settings";
 
@@ -22,7 +23,7 @@ const MODES = [
   { id: "jev", label: "vs Jev", available: true },
   { id: "local", label: "2 Players", available: true },
   { id: "stockfish", label: "vs Stockfish", available: true },
-  { id: "hybrid", label: "Hybrid", available: false },
+  { id: "hybrid", label: "Hybrid", available: true },
 ] as const;
 
 const COLORS = [
@@ -70,9 +71,13 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
   const update = (patch: Partial<GameSetup>) => setSetup((current) => ({ ...current, ...patch }));
   const personality = PERSONALITIES.find((option) => option.id === setup.personality);
   const difficulty = DIFFICULTIES.find((option) => option.id === setup.difficulty);
-  const againstComputer = setup.mode === "jev" || setup.mode === "stockfish";
+  const againstComputer = setup.mode !== "local";
   const difficultyHint =
-    setup.mode === "stockfish" ? stockfishHint(setup.difficulty) : difficulty?.description;
+    setup.mode === "stockfish"
+      ? stockfishHint(setup.difficulty)
+      : setup.mode === "hybrid"
+        ? `Stockfish shortlists ${SHORTLIST_SIZE} moves at depth ${HYBRID_LEVELS[setup.difficulty].depth}. ${difficulty?.description ?? ""}`
+        : difficulty?.description;
 
   return (
     <>
@@ -86,7 +91,8 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
           type="single"
           value={setup.mode}
           onValueChange={(value) =>
-            (value === "jev" || value === "local" || value === "stockfish") && update({ mode: value })
+            (value === "jev" || value === "local" || value === "stockfish" || value === "hybrid") &&
+            update({ mode: value })
           }
           variant="outline"
           aria-labelledby="mode-label"
@@ -126,7 +132,7 @@ function NewGameForm({ defaults, onStart }: { defaults: GameSetup; onStart: (set
             </ToggleGroup>
           </Field>
 
-          {setup.mode === "jev" && (
+          {(setup.mode === "jev" || setup.mode === "hybrid") && (
             <Field label="Jev's personality" id="personality" hint={personality?.description}>
               <ToggleGroup
                 type="single"

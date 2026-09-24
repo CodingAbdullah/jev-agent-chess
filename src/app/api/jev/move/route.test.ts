@@ -51,4 +51,34 @@ describe("POST /api/jev/move", () => {
     const response = await post({ fen: START, history: Array(5000).fill("e4"), personality: "balanced", difficulty: "hard" });
     expect(response.status).toBe(413);
   });
+
+  it("chooses only among Stockfish's candidates in hybrid mode", async () => {
+    vi.stubEnv("JEV_MOCK", "1");
+    const response = await post({
+      fen: START,
+      history: [],
+      personality: "positional",
+      difficulty: "hard",
+      candidates: [
+        { uci: "g1f3", score: { type: "cp", value: 30 }, line: ["Nf3", "d5"] },
+        { uci: "c2c4", score: { type: "cp", value: 28 }, line: ["c4"] },
+      ],
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(["Nf3", "c4"]).toContain(body.san);
+    expect(body.alternatives.map((entry: { san: string }) => entry.san).sort()).toEqual(["Nf3", "c4"]);
+  });
+
+  it("rejects a shortlist with no legal moves", async () => {
+    const response = await post({
+      fen: START,
+      history: [],
+      personality: "balanced",
+      difficulty: "hard",
+      candidates: [{ uci: "e2e5", score: { type: "cp", value: 0 }, line: [] }],
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "None of the candidates is a legal move in this position." });
+  });
 });

@@ -7,13 +7,13 @@ import {
   PermissionDeniedError,
   RateLimitError,
 } from "@typesafe-ai/sdk";
-import { Chess } from "chess.js";
+import { Chess, type Move } from "chess.js";
 import { toMoveInput } from "@/lib/chess/game";
 import type { JevClient, JevMode } from "./client";
 import { bestByInterest } from "./heuristic";
-import { buildMoveRequest, candidateMoves } from "./prompt";
+import { buildMoveRequest, candidateMoves, type StockfishNote } from "./prompt";
 import { selectMove, type Random } from "./select";
-import type { JevMoveRequest, JevMoveResponse, MoveProbability } from "./types";
+import type { JevMoveRequest, JevMoveResponse, MoveProbability, StockfishCandidate } from "./types";
 
 /** How many of Jev's candidates the browser gets for its chart. */
 export const ALTERNATIVES_SHOWN = 5;
@@ -43,9 +43,29 @@ type DecideOptions = {
 };
 
 /**
+ * Match Stockfish's shortlist to legal moves, keeping its order. Anything that
+ * is not legal here is dropped; the route has already checked there is at
+ * least one legal candidate.
+ */
+export function hybridCandidates(chess: Chess, shortlist: readonly StockfishCandidate[]) {
+  const byUci = new Map(
+    chess.moves({ verbose: true }).map((move) => [`${move.from}${move.to}${move.promotion ?? ""}`, move]),
+  );
+  const moves: Move[] = [];
+  const notes = new Map<string, StockfishNote>();
+  for (const candidate of shortlist) {
+    const move = byUci.get(candidate.uci);
+    if (!move || notes.has(move.san)) continue;
+    moves.push(move);
+    notes.set(move.san, { rank: moves.length, score: candidate.score, line: candidate.line });
+  }
+  return { moves, notes };
+}
+
+/**
  * Ask Jev for a move. If Jev fails for any reason other than the caller
- * cancelling, a simple local heuristic picks a legal move instead, and the
- * response says why.
+ * cancelling, a fallback plays instead and the response says why: Stockfish's
+ * top choice in hybrid mode, or a simple local heuristic otherwise.
  */
 export async function decideMove({
   client,
@@ -58,12 +78,13 @@ export async function decideMove({
 }: DecideOptions): Promise<JevMoveResponse> {
   const started = now();
   const chess = new Chess(request.fen);
-  const candidates = candidateMoves(chess);
+  const hybrid = request.candidates?.length ? hybridCandidates(chess, request.candidates) : null;
+  const candidates = hybrid ? hybrid.moves : candidateMoves(chess);
   const bySan = new Map(candidates.map((move) => [move.san, move]));
 
   try {
     const result = await client.systemOne(
-      buildMoveRequest(chess, request.history, request.personality, candidates),
+      buildMoveRequest(chess, request.history, request.personality, { candidates, stockfish: hybrid?.notes }),
       { signal },
     );
     const answer = result.answers?.move;
@@ -95,7 +116,7 @@ export async function decideMove({
     if (error instanceof APIUserAbortError || signal?.aborted) throw error;
     const reason = describeFailure(error);
     log(`Jev fallback: ${reason} ${error instanceof Error ? `(${error.name}: ${error.message})` : ""}`);
-    const fallback = bestByInterest(candidates);
+    const fallback = hybrid ? candidates[0] : bestByInterest(candidates);
     if (!fallback) throw new Error("No legal moves in this position");
     return {
       move: toMoveInput(fallback),

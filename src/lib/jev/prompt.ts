@@ -1,7 +1,8 @@
 import { choice, type ChoiceQuestion, type SystemOneRequest } from "@typesafe-ai/sdk";
-import type { Chess, Move } from "chess.js";
+import type { Chess, Color, Move } from "chess.js";
 import { COLOR_NAME, materialBalance } from "@/lib/chess/game";
 import { moveInterest } from "./heuristic";
+import type { Score } from "@/lib/stockfish/uci";
 import type { PersonalityId } from "./types";
 
 /**
@@ -65,17 +66,53 @@ export function candidateMoves(chess: Chess, limit = MAX_CHOICES): Move[] {
 
 export type JevQuestions = { move: ChoiceQuestion<Record<string, string>> };
 
+/** Stockfish's view of one shortlisted move, keyed by SAN in `BuildOptions`. */
+export type StockfishNote = { rank: number; score: Score; line: readonly string[] };
+
+type BuildOptions = {
+  /** The moves to offer. Defaults to every legal move, capped. */
+  candidates?: readonly Move[];
+  /** Hybrid mode: Stockfish's rank, evaluation and expected line for each candidate. */
+  stockfish?: ReadonlyMap<string, StockfishNote>;
+};
+
+/** Stockfish's evaluation of a move, from the point of view of the side playing it. */
+export function describeStockfishNote(note: StockfishNote, turn: Color): string {
+  const score = turn === "w" ? note.score : { ...note.score, value: -note.score.value };
+  let verdict: string;
+  if (score.type === "mate") {
+    verdict =
+      score.value > 0
+        ? `Stockfish sees mate in ${score.value} for you`
+        : `Stockfish sees you getting mated in ${Math.abs(score.value)}`;
+  } else {
+    const pawns = score.value / 100;
+    verdict = `Stockfish evaluation for you: ${pawns >= 0 ? "+" : "-"}${Math.abs(pawns).toFixed(2)} pawns`;
+  }
+  const parts = [`Stockfish's choice #${note.rank}`, verdict];
+  if (note.line[1]) parts.push(`expected reply ${note.line[1]}`);
+  return parts.join(", ");
+}
+
 /** Build the System One request that asks Jev to pick a move. */
 export function buildMoveRequest(
   chess: Chess,
   history: readonly string[],
   personality: PersonalityId,
-  candidates: readonly Move[] = candidateMoves(chess),
+  { candidates = candidateMoves(chess), stockfish }: BuildOptions = {},
 ): SystemOneRequest<JevQuestions> {
-  const side = COLOR_NAME[chess.turn()];
-  const balance = materialBalance(chess) * (chess.turn() === "w" ? 1 : -1);
+  const turn = chess.turn();
+  const side = COLOR_NAME[turn];
+  const balance = materialBalance(chess) * (turn === "w" ? 1 : -1);
   const criteria: Record<string, string> = {};
-  for (const move of candidates) criteria[move.san] = describeMove(move);
+  for (const move of candidates) {
+    const note = stockfish?.get(move.san);
+    criteria[move.san] = note ? `${describeMove(move)}. ${describeStockfishNote(note, turn)}` : describeMove(move);
+  }
+
+  const instructions = stockfish
+    ? `You are playing chess as ${side}. Stockfish, a strong chess engine, has shortlisted these moves, best first, with its evaluations. ${STYLE[personality]} Pick the move that best fits this style without throwing the game away.`
+    : `You are playing chess as ${side}. ${STYLE[personality]} Pick one move from the options.`;
 
   return {
     state: {
@@ -86,12 +123,7 @@ export function buildMoveRequest(
       material_balance_for_side_to_move: balance,
       recent_moves_san: history.slice(-HISTORY_PLIES),
     },
-    questions: {
-      move: choice(
-        `You are playing chess as ${side}. ${STYLE[personality]} Pick one move from the options.`,
-        criteria,
-      ),
-    },
+    questions: { move: choice(instructions, criteria) },
   };
 }
 

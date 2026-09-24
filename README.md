@@ -19,6 +19,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - A Jev panel showing the move played, Jev's confidence, and its top candidate moves
 - A local fallback move, clearly labelled, when Jev fails or times out
 - Play against Stockfish at three difficulty levels, with its evaluation and expected line shown
+- Hybrid mode: Stockfish shortlists its five best moves, and Jev picks the one that fits its personality. A panel shows Stockfish's ranking and evaluations beside Jev's probabilities
 - An evaluation bar beside the board, from a background Stockfish analysis, which can be turned off
 - Local two-player games on one device
 - Move by clicking or by dragging pieces
@@ -32,7 +33,7 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Light and dark mode, four board themes, synthesized move sounds and optional coordinates, all saved on the device
 - Layouts for desktop and phone screens
 
-A hybrid opponent, where Stockfish shortlists moves and Jev picks one, arrives in a later build phase. See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
+See [docs/PLAN.md](docs/PLAN.md) for the full plan and its status.
 
 ## Requirements
 
@@ -117,6 +118,7 @@ src/lib/chess/         rules, clocks and game state reducer, free of React
 src/lib/jev/           Jev prompt, move selection, mock, fallback and route validation
 src/app/api/jev/move/  the server route that calls Jev
 src/lib/stockfish/     UCI parsing, the Web Worker engine wrapper and Stockfish's move choice
+src/lib/hybrid.ts      hybrid mode: Stockfish's shortlist, then Jev's choice
 scripts/               engine copy step and the live Jev smoke test
 src/lib/               settings, sounds, board themes and shared helpers
 e2e/                   Playwright tests

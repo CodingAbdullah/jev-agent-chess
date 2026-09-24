@@ -30,8 +30,8 @@ decisions, with their confidence, are shown in the UI.
 | 3 | Clocks, move history, captured pieces, undo, FEN and PGN import and export, board flip, themes, sound, game-over dialog, phone layout | Done |
 | 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Built and tested against the mock. Live check pending |
 | 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Done |
-| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Next |
-| 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | To do |
+| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Done, with the mock Jev |
+| 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | Next |
 
 Each phase ends with lint, type checks, unit tests, the production build and the
 browser tests all passing, then one commit pushed to the working branch.
@@ -46,8 +46,9 @@ browser tests all passing, then one commit pushed to the working branch.
    answers. Check how the real API reports errors and limits.
 2. **Add rate limiting to `/api/jev/move` before any public deployment.** Right
    now anyone who can reach the site can spend the API key's quota.
-3. **Phase 6, hybrid mode.** Stockfish's engine wrapper already supports MultiPV,
-   so it can return its top five candidates with scores for Jev to choose from.
+3. **Phase 7, polish.** Full-game end-to-end tests, an accessibility pass
+   (keyboard play on the board, screen reader checks, contrast), and a final
+   phone pass.
 
 ## Design decisions
 
@@ -79,6 +80,13 @@ browser tests all passing, then one commit pushed to the working branch.
   mode, including vs Jev. It is on by default and can be turned off in
   Settings, since it gives hints during play. A Jev score question could fill
   it instead in Jev games, but that is not built.
+- **Hybrid mode** runs Stockfish in the browser at full skill with MultiPV 5,
+  then sends the shortlist to the same Jev route as optional `candidates`. The
+  route re-checks every candidate against chess.js and drops illegal ones, and
+  each choice description adds Stockfish's rank, its evaluation from the
+  mover's side, and the reply it expects. Difficulty sets Stockfish's depth
+  (6, 10 or 16) and Jev's sampling, as in Jev mode. If Jev fails, Stockfish's
+  top choice is played. With only one candidate, Jev is not asked.
 - **Stockfish difficulty** uses Skill Level and search limits: Easy is skill 2
   at depth 4, Medium skill 8 at depth 8, Hard skill 20 at depth 16, each with a
   time cap of 0.4, 0.8 and 1.5 seconds.
@@ -135,8 +143,15 @@ browser tests all passing, then one commit pushed to the working branch.
   and `useEvaluation` streams the background analysis for the evaluation bar.
 - The settings field `jevColor` was renamed `playerColor`. Older saved
   settings are migrated when read.
-- The new game dialog lists Hybrid, disabled and marked "Soon". Enable it when
-  phase 6 lands.
+- `src/lib/hybrid.ts`: hybrid move flow in the browser. It builds the
+  shortlist from Stockfish's MultiPV lines, turns scores to White's side, asks
+  the Jev route, and merges Jev's probabilities into the shortlist.
+- `src/lib/jev/decide.ts` `hybridCandidates`: maps the shortlist to legal
+  moves on the server. `src/lib/jev/validate.ts` checks the shortlist's shape:
+  at most 8 candidates, UCI moves, integer scores and SAN lines.
+- `src/components/chess/hybrid-panel.tsx`: the hybrid panel. Stockfish and
+  hybrid games share one engine worker for the computer's moves.
+- Every game mode in the new game dialog is now available.
 
 ## What we know about Jev
 
