@@ -56,12 +56,27 @@ browser tests all passing, then one commit pushed to the working branch.
      no secrets are needed. Upload the Playwright report when tests fail.
    - A `docker build` of the image, so Dockerfile breakage is caught.
    - Never give pull requests from forks access to `TYPESAFE_API_KEY`.
-5. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
+5. **Publish a prebuilt Docker image to GitHub's registry (GHCR).** Add
+   `.github/workflows/docker-publish.yml`:
+   - Runs on version tags such as `v1.0.0` or on a published release, and
+     optionally on pushes to `main` to keep a `latest` image.
+   - Checks out the code, logs in to `ghcr.io` with the built-in
+     `GITHUB_TOKEN` (`packages: write` permission), then builds the existing
+     `Dockerfile` and pushes `ghcr.io/codingabdullah/jev-agent-chess`.
+   - Tags each image with its version (`v1.0.0`, `1.0`) and `latest`, for
+     example with `docker/metadata-action`.
+   - Needs no secrets of its own. `TYPESAFE_API_KEY` is never used at build
+     time; people pass it when they run the container.
+   - After the first run, the owner sets the package to public under the
+     GitHub profile's Packages tab, so anyone can pull it without logging in.
+   - Add the one-line `docker run` for the published image to the README's
+     Docker section.
+6. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
    Node 22 and `.env.example`; that no API key is needed thanks to the mock;
    the scripts to run before opening a pull request; keeping the axe
    accessibility tests passing; never committing keys; and that contributions
    are accepted under GPL-3.0-or-later. Link it from the README.
-6. **Ideas not yet built:** resign and draw offers, a review mode for stepping
+7. **Ideas not yet built:** resign and draw offers, a review mode for stepping
    through finished games, and a Jev score question for the evaluation bar in
    Jev games.
 
@@ -121,6 +136,11 @@ browser tests all passing, then one commit pushed to the working branch.
 - **The project is licensed GPL-3.0-or-later**, switched from MIT in phase 7 at
   the owner's request, because it ships Stockfish, which is GPL-3.0. Anyone who
   distributes the app must offer its source under the GPL.
+- **No npm package for the app.** It is a whole web app, not a library, so
+  it is shared as a prebuilt Docker image on GHCR, the Deploy to Vercel
+  button, and the source for anyone who wants to modify it. Parts such as
+  the Jev move picker or the Stockfish worker wrapper could become npm
+  libraries later if other projects want to reuse them.
 
 ## Current architecture
 
