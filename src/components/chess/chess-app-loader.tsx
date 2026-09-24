@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { KingLogo } from "./logo";
 
 /**
  * The game reads saved settings from the browser on its first render, so it is
@@ -15,7 +16,10 @@ function LoadingShell() {
   return (
     <div className="flex flex-1 flex-col" aria-busy="true">
       <header className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
-        <h1 className="text-lg font-semibold tracking-tight">♟ Jev Chess</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <KingLogo className="size-5 shrink-0" />
+          Jev Chess
+        </h1>
       </header>
       <main className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-2 p-4 sm:p-6">
         <div className="h-12" />

@@ -226,6 +226,9 @@ browser tests all passing, then one commit pushed to the working branch.
   Jev prompt and the screen reader announcements.
 - `src/components/chess/move-entry.tsx`: the typed move box, using
   `parseTypedMove` from `game.ts`.
+- The logo is a king. `src/app/icon.svg` is the browser tab icon, and
+  `src/components/chess/logo.tsx` draws the same king in the header in the
+  text colour. Change both together.
 - `src/app/icon.svg`, `error.tsx` and `not-found.tsx`: app icon and error pages.
   This Next.js version passes `retry`, not `reset`, to error pages.
 - `Dockerfile`, `compose.yaml`, `.dockerignore` and `.env.example`: container

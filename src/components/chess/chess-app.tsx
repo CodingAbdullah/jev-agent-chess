@@ -50,6 +50,7 @@ import { GameToolbar } from "./game-toolbar";
 import { ImportExportDialog, type ImportExportTab } from "./import-export-dialog";
 import { JevPanel } from "./jev-panel";
 import { MoveHistory } from "./move-history";
+import { KingLogo } from "./logo";
 import { MoveEntry } from "./move-entry";
 import { NewGameDialog, type GameSetup } from "./new-game-dialog";
 import { PlayerBar } from "./player-bar";
@@ -234,7 +235,10 @@ export function ChessApp() {
   return (
     <div className="flex flex-1 flex-col">
       <header className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
-        <h1 className="text-lg font-semibold tracking-tight">♟ Jev Chess</h1>
+        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <KingLogo className="size-5 shrink-0" />
+          Jev Chess
+        </h1>
         <Button onClick={() => setDialog("new")}>New game</Button>
       </header>
 
