@@ -92,9 +92,9 @@ browser tests all passing, then one commit pushed to the working branch.
   time cap of 0.4, 0.8 and 1.5 seconds.
 - **Stockfish** runs in the browser in a Web Worker, using the lite
   single-threaded build. It is about 1.6MB and needs no special server headers.
-- **Stockfish is GPL-3.0 and this repo is MIT.** Shipping it means the deployed
-  app must follow GPL terms, mainly offering its source. This was raised with
-  the owner, who approved the plan. Confirm again before any public deployment.
+- **The project is licensed GPL-3.0-or-later**, switched from MIT in phase 7 at
+  the owner's request, because it ships Stockfish, which is GPL-3.0. Anyone who
+  distributes the app must offer its source under the GPL.
 
 ## Current architecture
 

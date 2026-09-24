@@ -89,15 +89,29 @@ Before the first end-to-end run on a new machine, install the browser Playwright
 npx playwright install chromium
 ```
 
-## Third-party licences
+## Licence
 
-Stockfish is free software under the GNU General Public License v3. The engine
-files are copied from the `stockfish` npm package into `public/stockfish/` by
-`scripts/copy-stockfish.mjs`, which runs after `npm install` and before `dev`
-and `build`. The licence is served alongside the engine at
-`/stockfish/Copying.txt`, and the Stockfish panel links to it and to the
-engine's source code. Anyone deploying this app publicly must follow the
-GPL's terms for the engine.
+Copyright (C) 2026 Abdullah Muhammad.
+
+Jev Chess is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but without any
+warranty. See [LICENSE](LICENSE) for the full terms.
+
+The project uses the GPL because it ships Stockfish, which is GPL-3.0. Anyone
+who distributes this app, including a modified version, must make its source
+available under the same licence.
+
+### Third-party software
+
+- **Stockfish** is GPL-3.0. The engine files are copied from the `stockfish`
+  npm package into `public/stockfish/` by `scripts/copy-stockfish.mjs`, which
+  runs after `npm install` and before `dev` and `build`. Its licence is served
+  at `/stockfish/Copying.txt`, and the Stockfish panel links to it and to the
+  engine's source code.
+- The other runtime dependencies use MIT, BSD-2-Clause, ISC or Apache-2.0,
+  all of which are compatible with GPLv3.
 
 ## Adding UI components
 

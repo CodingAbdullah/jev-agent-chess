@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Chess web app powered by TypeSafe AI's Jev and Stockfish",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "author": "Abdullah Muhammad",
   "engines": {
     "node": ">=20.9"
