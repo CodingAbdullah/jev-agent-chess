@@ -93,7 +93,7 @@ describe("POST /api/jev/move", () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBe("30");
     expect(await limited.json()).toEqual({
-      error: "You are asking for moves too quickly. Try again in 30 seconds.",
+      error: "You are asking Jev too quickly. Try again in 30 seconds.",
     });
     // Another client is unaffected.
     expect((await post(body, "198.51.100.10")).status).toBe(200);

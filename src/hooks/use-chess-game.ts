@@ -1,6 +1,6 @@
 "use client";
 
-import { Chess } from "chess.js";
+import { Chess, type Color } from "chess.js";
 import { useCallback, useEffect, useMemo, useReducer } from "react";
 import { timeLeft, type TimeControl } from "@/lib/chess/clock";
 import {
@@ -29,7 +29,7 @@ export function useChessGame(initialTimeControl: TimeControl | null) {
   const moves = useMemo(() => state.plies.map((ply) => ply.move), [state.plies]);
   const chess = useMemo(() => replay(moves, state.startFen), [moves, state.startFen]);
   const history = useMemo(() => chess.history({ verbose: true }), [chess]);
-  const status = useMemo(() => getStatus(chess, state.flagged), [chess, state.flagged]);
+  const status = useMemo(() => getStatus(chess, state.flagged, state.ending), [chess, state.flagged, state.ending]);
   const captured = useMemo(() => capturedPieces(history), [history]);
   const material = useMemo(() => materialBalance(chess), [chess]);
   const gameOver = isGameOver(status);
@@ -68,6 +68,10 @@ export function useChessGame(initialTimeControl: TimeControl | null) {
 
   const undo = useCallback(() => dispatch({ type: "undo", at: Date.now() }), []);
 
+  const resign = useCallback((color: Color) => dispatch({ type: "resign", color, at: Date.now() }), []);
+
+  const agreeDraw = useCallback(() => dispatch({ type: "agree-draw", at: Date.now() }), []);
+
   const newGame = useCallback(
     (timeControl: TimeControl | null) => dispatch({ type: "new", timeControl }),
     [],
@@ -94,6 +98,8 @@ export function useChessGame(initialTimeControl: TimeControl | null) {
     canUndo: moves.length > 0,
     makeMove,
     undo,
+    resign,
+    agreeDraw,
     newGame,
     loadGame,
   };

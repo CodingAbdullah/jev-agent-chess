@@ -89,6 +89,48 @@ function answerChoice(question: WireQuestion, seed: string) {
   return { type: "choice", choice: best, confidence: probabilities[best]!, probabilities };
 }
 
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * A score question, read as "who stands better": the material balance picks
+ * the level, three points of material to a level, and the neighbouring levels
+ * share some probability, as the live API's answers do.
+ */
+function answerScore(question: WireQuestion, state: Record<string, unknown>) {
+  const levels = Array.isArray(question.criteria) ? question.criteria : [];
+  const top = Math.max(1, levels.length - 1);
+  const balance = Number(state.material_balance_for_white ?? 0) || 0;
+  const centre = Math.min(top, Math.max(0, top / 2 + balance / 3));
+  const weights = levels.map((_, level) => Math.exp(-((level - centre) ** 2) / 0.5));
+  const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  const probabilities: Record<string, number> = {};
+  const legend: Record<string, unknown> = {};
+  let score = 0;
+  let best = 0;
+  levels.forEach((description, level) => {
+    const probability = weights[level]! / total;
+    probabilities[level] = round2(probability);
+    legend[level] = description;
+    score += level * probability;
+    if (probability > weights[best]! / total) best = level;
+  });
+  return { type: "score", score: round2(score), confidence: probabilities[best] ?? 0, legend, probabilities };
+}
+
+/**
+ * A yes or no question, read as a draw offer: accept when behind, decline when
+ * level or ahead. Stockfish's evaluation, when given, counts instead of material,
+ * and a style that "rarely accepts" leans towards no.
+ */
+function answerDrawOffer(question: WireQuestion, state: Record<string, unknown>) {
+  const style = String(question.instructions ?? "").toLowerCase();
+  const evaluation = /([+-]\d+(?:\.\d+)?) pawns/.exec(String(state.stockfish_evaluation_for_you ?? ""));
+  const advantage = evaluation ? Number(evaluation[1]) : Number(state.material_balance_for_you ?? 0) || 0;
+  const lean = /rarely accept/.test(style) ? -1 : /accept when the position is level/.test(style) ? 1 : 0;
+  const noul = 1 / (1 + Math.exp(advantage * 1.5 + 0.8 - lean));
+  return { type: "noul", noul: round2(noul) };
+}
+
 export function createMockFetch(options: MockOptions = {}) {
   return async (_url: string, init?: RequestInit): Promise<Response> => {
     const json = (body: unknown, status = 200) =>
@@ -104,10 +146,14 @@ export function createMockFetch(options: MockOptions = {}) {
     const request = JSON.parse(String(init?.body ?? "{}")) as WireRequest;
     const seed = JSON.stringify(request.state ?? "");
     const answers: Record<string, unknown> = {};
+    const state = (typeof request.state === "object" && request.state !== null ? request.state : {}) as Record<
+      string,
+      unknown
+    >;
     for (const [name, question] of Object.entries(request.questions ?? {})) {
       if (question.type === "choice") answers[name] = answerChoice(question, seed);
-      else if (question.type === "noul") answers[name] = { type: "noul", noul: 0.5 };
-      else answers[name] = { type: "score", score: 0, confidence: 0.5, legend: {}, probabilities: {} };
+      else if (question.type === "noul") answers[name] = answerDrawOffer(question, state);
+      else answers[name] = answerScore(question, state);
     }
     return json({
       model: MOCK_MODEL,

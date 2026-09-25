@@ -32,14 +32,15 @@ decisions, with their confidence, are shown in the UI.
 | 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Done |
 | 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Done, checked against the live API |
 | 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | Done |
+| 8 | Resign and draw offers, review mode, Jev's evaluation in Jev games (step 10 below) | Done, checked against the live API |
 
 Each phase ends with lint, type checks, unit tests, the production build and the
 browser tests all passing, then one commit pushed to the working branch.
 
 ## Next step
 
-Steps 1 and 2, and 5 to 9, are done. What remains needs the owner, or is a new
-feature.
+Steps 1 and 2, and 5 to 10, are done. What remains, steps 3 and 4, needs the
+owner.
 
 1. **Done: phase 4 against the live API.** `npm run jev:smoke` and
    `npm run jev:live` pass with a real key: model `jev-1.13.0`, answers in 150
@@ -76,9 +77,11 @@ feature.
 8. **Done: `CONTRIBUTING.md`**, linked from the README.
 9. **Done: `SECURITY.md` and `.github/dependabot.yml`.** Dependabot groups
    npm minor and patch updates, and ignores `@playwright/test`.
-10. **Ideas not yet built:** resign and draw offers, a review mode for stepping
-    through finished games, and a Jev score question for the evaluation bar in
-    Jev games.
+10. **Done: resign and draw offers, review mode, and Jev's evaluation.** See
+    phase 8 and the design decisions. A 12-move game against live Jev in the
+    browser, with its evaluation on, ran without errors: Jev won material four
+    times, its view moved from "about equal" to "Black is winning", and it
+    declined a draw at 10 percent.
 
 ## Design decisions
 
@@ -170,6 +173,44 @@ feature.
   the Jev move picker or the Stockfish worker wrapper could become npm
   libraries later if other projects want to reuse them.
 
+- **Resign and draw offers.** The game state holds an `ending`: a
+  resignation or an agreed draw, which stops the clock and blocks moves. Undo
+  takes it back with the last move. Against the computer you resign any time,
+  and in a two-player game the side to move resigns, after a confirmation.
+  Draws are offered on your own turn, once per position; a move, undo or new
+  game withdraws the offer.
+- **Who answers a draw offer.** In two-player games, the other player. Every
+  computer declines before move 10, without asking Jev or searching, so a game
+  cannot be drawn at once. Then Stockfish searches at full strength (depth 12,
+  0.8 seconds) and accepts unless it is better by more than 0.25 pawns. Jev
+  answers a yes or no question on `/api/jev/draw`, with a sentence of
+  instructions per personality (Aggressive "rarely accepts", Defensive accepts
+  level positions), and accepts at 50 percent or more. Hybrid asks Jev with
+  Stockfish's evaluation, from Jev's side, in the state. If Jev fails, a rule
+  decides: accept only when behind on material, or by Stockfish's score in
+  hybrid. The answer is shown with Jev's probability, or why the fallback
+  decided.
+- **Jev's evaluation.** In Jev games, when analysis is shown, the bar shows
+  Jev's answer to a score question on `/api/jev/evaluate`, on seven levels
+  from "Black is winning" to "White is winning". The bar uses the expected
+  level; the caption shows the most likely level and its probability, with
+  Stockfish's number underneath. Answers are cached per position, with a
+  400 ms pause so stepping through a game asks only where it stops. If Jev
+  fails, Stockfish's bar stands in. These calls share the Jev rate limits.
+- **Jev needs the material spelled out.** From the FEN alone, live Jev judged
+  White a queen up as "about equal" and, as Black a rook up, would have
+  accepted a draw. The evaluation and draw questions therefore send
+  `positionFacts`: the material balance, a sentence such as "White is ahead by
+  9 points of material", and each side's pieces. With them it reads the queen
+  as "White is winning" and declines. The move question is unchanged.
+- **Review mode** appears once a game ends: first, previous, next and final
+  buttons, the arrow keys, Home and End anywhere outside a text box or dialog,
+  and every move in the history becomes a button. The board, captured pieces,
+  material and evaluation follow the position shown; the result stays in the
+  status line. A caption, which is also a polite live region, describes the
+  position, such as "Move 10 of 13, 5… Bxd1: Black played Bishop from g4 to d1,
+  captures a queen."
+
 ## Current architecture
 
 - `src/lib/chess/game.ts`: rules helpers, game status, material, move list rows,
@@ -242,6 +283,21 @@ feature.
   has a health check, and holds no secrets.
 - `scripts/setup.sh` and `scripts/setup.ps1`: the setup scripts described
   under design decisions. `.gitattributes` keeps `.sh` files on LF.
+- `src/lib/jev/judge.ts`: Jev's evaluation (`evaluatePosition`) and its answer
+  to a draw offer (`decideDraw`), with the fallback rule. The prompts for both
+  are in `prompt.ts` (`positionFacts`, `buildEvaluationRequest`,
+  `buildDrawRequest`), and the mock answers both.
+- `src/lib/jev/route.ts`: what every Jev route does first: rate limits, body
+  size, JSON and validation. The routes are `move`, `evaluate` and `draw`
+  under `src/app/api/jev/`.
+- `src/lib/draw-offer.ts`: the browser side of a draw offer: the move-10 rule,
+  Stockfish's rule, and asking Jev. `src/hooks/use-draw-offer.ts` keeps one
+  offer per position, and `src/components/chess/game-actions.tsx` shows the
+  buttons, the offer and the resign confirmation.
+- `src/hooks/use-jev-evaluation.ts`: Jev's evaluation for the bar, cached per
+  position.
+- `src/components/chess/review-controls.tsx`: the review buttons and caption.
+  The game screen keeps the reviewed ply and replays the moves up to it.
 - The board exposes the current position as `data-fen`, which the full-game
   browser tests read to choose legal moves.
 
@@ -278,7 +334,12 @@ so everything below comes from the SDK's own README and type definitions.
   are rounded to two decimals, so small ones read as 0.
 - Still unknown: pricing, and the API's own rate limits.
 - `npm run jev:live` (`src/lib/jev/live.test.ts`) runs puzzles, a hybrid
-  shortlist and every personality against the live API. `npm test` skips it.
+  shortlist, every personality, the evaluation and draw questions against the
+  live API. `npm test` skips it.
+- Score questions answer with an expected level (`score`, which can fall
+  between levels), a `confidence`, and a probability per level. Yes or no
+  questions answer with `noul`, the probability of yes. Both came back in
+  120 to 500 ms.
 
 Example, from the SDK README:
 

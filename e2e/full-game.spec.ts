@@ -90,7 +90,7 @@ async function playAgainstComputer(page: Page, mode: string, testId: string) {
   }
 
   // Every move made it into the history, and the computer's panel kept up.
-  const cells = history.locator("span").filter({ hasText: /^[A-Za-z][\w+#=-]*$/ });
+  const cells = history.locator("[data-ply]");
   await expect(cells).toHaveCount(plies);
   await expect(page.getByTestId(testId)).toBeVisible();
   expect(errors).toEqual([]);

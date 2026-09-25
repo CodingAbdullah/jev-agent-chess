@@ -8,6 +8,7 @@ import { TypeSafeClient } from "@typesafe-ai/sdk";
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { decideMove } from "./decide";
+import { decideDraw, evaluatePosition } from "./judge";
 import { PERSONALITIES, type PersonalityId } from "./types";
 
 const requested = process.env.JEV_LIVE === "1" || process.env.npm_lifecycle_event === "jev:live";
@@ -82,6 +83,34 @@ describe.skipIf(!live)("live Jev", () => {
       expect(["e4", "d4", "Nf3", "c4", "g3"]).toContain(decision.san);
       expect(decision.alternatives.length).toBeGreaterThan(1);
     }
+  }, 60_000);
+
+  it("judges who stands better, for the evaluation bar", async () => {
+    const cases = [
+      { fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", min: 0.35, max: 0.65 },
+      // White has won Black's queen.
+      { fen: "rnb1kbnr/pppp1ppp/8/4p3/4P2N/8/PPPP1PPP/RNBQKB1R b KQkq - 0 3", min: 0.6, max: 1 },
+      // Black is a rook up.
+      { fen: "4k3/8/8/8/8/8/r7/4K3 w - - 0 1", min: 0, max: 0.3 },
+    ];
+    for (const { fen, min, max } of cases) {
+      const evaluation = await evaluatePosition({ client, mode: "live", fen, history: [], log: () => {} });
+      console.log(`  ${fen}: ${evaluation.verdict} (${evaluation.score.toFixed(2)} of 6, ${evaluation.latencyMs} ms)`);
+      expect(evaluation.source).toBe("jev");
+      expect(evaluation.whiteShare).toBeGreaterThanOrEqual(min);
+      expect(evaluation.whiteShare).toBeLessThanOrEqual(max);
+    }
+  }, 60_000);
+
+  it("accepts a draw when lost and declines one when winning", async () => {
+    const offer = { client, mode: "live" as const, history: [], personality: "balanced" as const, log: () => {} };
+    // Jev plays Black in both; it is White's turn, as offers come on the player's move.
+    // Losing: a bare king against a queen. Winning: a queen against a bare king.
+    const losing = await decideDraw({ ...offer, fen: "4k3/8/8/8/8/8/8/Q3K3 w - - 0 30", jevColor: "b" });
+    const winning = await decideDraw({ ...offer, fen: "3qk3/8/8/8/8/8/8/4K3 w - - 0 30", jevColor: "b" });
+    console.log(`  draw: losing ${losing.probability}, winning ${winning.probability}`);
+    expect(losing).toMatchObject({ source: "jev", accept: true });
+    expect(winning).toMatchObject({ source: "jev", accept: false });
   }, 60_000);
 
   it("gives each personality its own view of a quiet position", async () => {

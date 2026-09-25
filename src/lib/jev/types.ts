@@ -66,6 +66,47 @@ export type MoveProbability = { san: string; probability: number };
  */
 export type JevSource = "jev" | "mock" | "fallback";
 
+/** What the browser sends to ask for Jev's view of a position. */
+export type JevEvaluateRequest = { fen: string; history: string[] };
+
+/** Jev's judgment of a position, for the evaluation bar. */
+export type JevEvaluation = {
+  source: Exclude<JevSource, "fallback">;
+  /** Jev's expected level, from 0 (Black is winning) to 6 (White is winning). */
+  score: number;
+  /** White's share of the evaluation bar, from 0 to 1. */
+  whiteShare: number;
+  /** The most likely level in words, such as "White is slightly better". */
+  verdict: string;
+  /** Jev's probability for that level, 0 to 1. */
+  confidence: number;
+  model?: string;
+  latencyMs: number;
+};
+
+/** What the browser sends when the player offers Jev a draw. */
+export type JevDrawRequest = {
+  fen: string;
+  history: string[];
+  personality: PersonalityId;
+  /** The side Jev plays. */
+  jevColor: "w" | "b";
+  /** Hybrid mode: Stockfish's evaluation of the position, from White's side. */
+  stockfishScore?: Score;
+};
+
+/** Jev's answer to a draw offer. */
+export type JevDrawResponse = {
+  accept: boolean;
+  source: JevSource;
+  /** Jev's probability of accepting. Missing on fallback. */
+  probability?: number;
+  /** Why the fallback decided instead. */
+  fallbackReason?: string;
+  model?: string;
+  latencyMs: number;
+};
+
 /** What the Jev route returns. */
 export type JevMoveResponse = {
   move: MoveInput;

@@ -8,15 +8,23 @@ import { useChessGame, type MoveOutcome } from "@/hooks/use-chess-game";
 import { useAiOpponent, type Think } from "@/hooks/use-ai-opponent";
 import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 import { useSettings } from "@/hooks/use-settings";
+import { useDrawOffer } from "@/hooks/use-draw-offer";
+import { useJevEvaluation, type JevEvaluationState } from "@/hooks/use-jev-evaluation";
 import { useEvaluation, useStockfishEngine, type Evaluation } from "@/hooks/use-stockfish";
 import { findBoardTheme } from "@/lib/board-themes";
 import { findTimeControl, TIME_CONTROLS } from "@/lib/chess/clock";
 import { describeMove } from "@/lib/chess/describe";
 import {
+  capturedPieces,
   describeStatus,
+  getStatus,
+  isGameOver,
+  materialBalance,
   moveRows,
   opponent,
+  replay,
   toPgn,
+  winnerOf,
   winsPhrase,
   type Color,
   type GameStatus,
@@ -43,6 +51,7 @@ import { stockfishMove, type StockfishMove } from "@/lib/stockfish/player";
 import { describeScore, formatScore, whiteShare } from "@/lib/stockfish/uci";
 import { cn } from "@/lib/utils";
 import { EvalBar } from "./eval-bar";
+import { GameActions } from "./game-actions";
 import { GameBoard } from "./game-board";
 import { GameOverDialog } from "./game-over-dialog";
 import { HybridPanel } from "./hybrid-panel";
@@ -54,6 +63,7 @@ import { KingLogo } from "./logo";
 import { MoveEntry } from "./move-entry";
 import { NewGameDialog, type GameSetup } from "./new-game-dialog";
 import { PlayerBar } from "./player-bar";
+import { ReviewControls } from "./review-controls";
 import { SettingsDialog } from "./settings-dialog";
 import { StockfishPanel } from "./stockfish-panel";
 
@@ -158,11 +168,75 @@ export function ChessApp() {
     onMove: announceMove,
   });
 
+  // Review: once a game ends, step through its positions. Null shows the final position.
+  const [review, setReview] = useState<{ key: string; ply: number } | null>(null);
+  const totalPlies = game.history.length;
+  const reviewPly = gameOver && review?.key === gameEndKey ? review.ply : null;
+  const shownPly = reviewPly ?? totalPlies;
+  const reviewing = shownPly !== totalPlies;
+  const shown = useMemo(
+    () => (reviewing ? replay(game.moves.slice(0, shownPly), game.startFen) : chess),
+    [reviewing, game.moves, shownPly, game.startFen, chess],
+  );
+  const shownHistory = useMemo(() => game.history.slice(0, shownPly), [game.history, shownPly]);
+  const shownStatus = reviewing ? getStatus(shown) : status;
+  const shownOver = isGameOver(shownStatus);
+  const goToPly = useCallback(
+    (ply: number) => setReview({ key: gameEndKey, ply: Math.max(0, Math.min(totalPlies, ply)) }),
+    [gameEndKey, totalPlies],
+  );
+
+  // The arrow keys, Home and End step through a finished game from anywhere outside a text box or dialog.
+  const keyboardReview = gameOver && totalPlies > 0 && dialog === null && !showGameOver;
+  useEffect(() => {
+    if (!keyboardReview) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, select, [contenteditable], [role=dialog], [role=radiogroup]")) return;
+      const step: Record<string, (ply: number) => number> = {
+        ArrowLeft: (ply) => ply - 1,
+        ArrowRight: (ply) => ply + 1,
+        Home: () => 0,
+        End: () => totalPlies,
+      };
+      const next = step[event.key];
+      if (!next) return;
+      event.preventDefault();
+      setReview((current) => {
+        const ply = current?.key === gameEndKey ? current.ply : totalPlies;
+        return { key: gameEndKey, ply: Math.max(0, Math.min(totalPlies, next(ply))) };
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [keyboardReview, gameEndKey, totalPlies]);
+
   // Against the computer, anything that hints at the best move stays hidden until the game ends.
   const showAnalysis =
     settings.showEvaluation && (!isAiGame(config) || gameOver || settings.evaluationInComputerGames);
-  const evaluation = useEvaluation({ enabled: showAnalysis, fen: chess.fen(), gameOver });
-  const evalDisplay = describeEvaluation(evaluation, status);
+  const evaluation = useEvaluation({ enabled: showAnalysis, fen: shown.fen(), gameOver: shownOver });
+  const evalDisplay = describeEvaluation(evaluation, shownStatus);
+  // In Jev games the bar shows Jev's own judgment, and the caption keeps Stockfish's number beside it.
+  const jevEvaluation = useJevEvaluation({
+    enabled: showAnalysis && config.mode === "jev" && !shownOver,
+    fen: shown.fen(),
+    history: shownHistory.map((move) => move.san),
+  });
+  const barDisplay =
+    config.mode === "jev" && !shownOver ? describeJevBar(jevEvaluation, evalDisplay) : evalDisplay;
+
+  // Draw offers and resignation.
+  const [drawNote, setDrawNote] = useState<{ gameId: number; message: string } | null>(null);
+  const draws = useDrawOffer({
+    config,
+    game,
+    names,
+    getEngine: getOpponentEngine,
+    onAnswer: (answer) => {
+      if (answer.accept) setDrawNote({ gameId: game.gameId, message: answer.message });
+    },
+  });
 
   const handleMove = useCallback(
     (input: MoveInput) => {
@@ -207,11 +281,12 @@ export function ChessApp() {
     setDialog("import-export");
   };
 
-  // A clock can run out without a move, so the timeout sound plays from here.
-  const timeoutKey = isTimeoutEnd(status) ? gameEndKey : null;
+  // A clock can run out, and players can resign or agree a draw, without a move,
+  // so the game-end sound for those plays from here.
+  const endWithoutMoveKey = endedWithoutMove(status) ? gameEndKey : null;
   useEffect(() => {
-    if (timeoutKey && soundOn) playSound("gameEnd");
-  }, [timeoutKey, soundOn]);
+    if (endWithoutMoveKey && soundOn) playSound("gameEnd");
+  }, [endWithoutMoveKey, soundOn]);
 
   const lastMove = game.history.at(-1);
   const lastMoveAnnouncement = lastMove ? `${names[lastMove.color]} played ${describeMove(lastMove)}.` : "";
@@ -220,12 +295,19 @@ export function ChessApp() {
   const topColor = opponent(bottomColor);
   const turn = chess.turn();
   const humansTurn = humanColor === null || turn === humanColor;
+  // You resign against the computer; in a two-player game, the side to move does.
+  const resigningSide: Color = humanColor ?? turn;
+  const shownCaptured = useMemo(
+    () => (reviewing ? capturedPieces(shownHistory) : game.captured),
+    [reviewing, shownHistory, game.captured],
+  );
+  const shownMaterial = reviewing ? materialBalance(shown) : game.material;
   const playerBar = (color: Color) => (
     <PlayerBar
       color={color}
       name={names[color]}
-      captured={game.captured[color]}
-      lead={color === "w" ? game.material : -game.material}
+      captured={shownCaptured[color]}
+      lead={color === "w" ? shownMaterial : -shownMaterial}
       clock={clock}
       turn={turn}
       active={!gameOver && turn === color}
@@ -250,18 +332,18 @@ export function ChessApp() {
           {playerBar(topColor)}
           <div className="flex items-stretch gap-1.5 sm:gap-2">
             {showAnalysis && (
-              <EvalBar whiteShare={evalDisplay.share} label={evalDisplay.label} orientation={orientation} />
+              <EvalBar whiteShare={barDisplay.share} label={barDisplay.label} orientation={orientation} />
             )}
             <div className="min-w-0 flex-1">
               <GameBoard
-                chess={chess}
-                lastMove={game.history.at(-1) ?? null}
+                chess={shown}
+                lastMove={shownHistory.at(-1) ?? null}
                 interactive={!gameOver && humansTurn}
                 orientation={orientation}
                 lightSquareColor={boardTheme.light}
                 darkSquareColor={boardTheme.dark}
                 showCoordinates={settings.showCoordinates}
-                positionKey={gameEndKey}
+                positionKey={`${gameEndKey}:${shownPly}`}
                 animate={!reducedMotion}
                 onMove={handleMove}
               />
@@ -275,6 +357,9 @@ export function ChessApp() {
             onImportExport={() => openImportExport("export")}
             onSettings={() => setDialog("settings")}
           />
+          {gameOver && totalPlies > 0 && (
+            <ReviewControls ply={shownPly} history={game.history} names={names} onGo={goToPly} />
+          )}
           <MoveEntry
             chess={chess}
             enabled={!gameOver && humansTurn}
@@ -303,12 +388,28 @@ export function ChessApp() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <StatusLine status={status} names={names} />
+              {showAnalysis && config.mode === "jev" && !shownOver && (
+                <JevEvaluationLine state={jevEvaluation} />
+              )}
               {showAnalysis && (
                 <p className="text-muted-foreground text-sm" data-testid="evaluation">
-                  Evaluation{" "}
+                  {config.mode === "jev" && !shownOver ? "Stockfish" : "Evaluation"}{" "}
                   <span className="text-foreground font-semibold tabular-nums">{evalDisplay.text}</span>
                   {evalDisplay.detail && <span> · {evalDisplay.detail}</span>}
                 </p>
+              )}
+              {!gameOver && (
+                <GameActions
+                  side={resigningSide}
+                  names={names}
+                  canOffer={draws.canOffer}
+                  offer={draws.offer}
+                  computer={isAiGame(config) ? aiName(config) : null}
+                  onOfferDraw={draws.offerDraw}
+                  onAccept={draws.accept}
+                  onDecline={draws.decline}
+                  onResign={() => game.resign(resigningSide)}
+                />
               )}
               {gameOver && (
                 <Button variant="outline" onClick={() => setDialog("new")}>
@@ -364,7 +465,8 @@ export function ChessApp() {
             <CardContent>
               <MoveHistory
                 rows={rows}
-                lastPly={game.history.length - 1}
+                lastPly={shownPly - 1}
+                onSelectPly={gameOver ? goToPly : undefined}
                 className={cn(
                   "max-h-64",
                   isAiGame(config)
@@ -405,7 +507,16 @@ export function ChessApp() {
         }}
         status={status}
         names={names}
-        subtitle={isAiGame(config) ? `${aiName(config)}: ${aiSetupLabel(config)}` : undefined}
+        subtitle={
+          [
+            status.kind === "draw" && status.reason === "agreement" && drawNote?.gameId === game.gameId
+              ? drawNote.message
+              : null,
+            isAiGame(config) ? `${aiName(config)}: ${aiSetupLabel(config)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         onRematch={rematch}
         onExport={() => {
           setDismissedGameEnd(gameEndKey);
@@ -421,9 +532,10 @@ function describeEvaluation(
   evaluation: Evaluation,
   status: GameStatus,
 ): { share: number | null; text: string; detail: string | null; label: string } {
-  if (status.kind === "checkmate" || status.kind === "timeout") {
-    const text = status.winner === "w" ? "1-0" : "0-1";
-    return { share: status.winner === "w" ? 1 : 0, text, detail: null, label: `Game over, ${text}.` };
+  const winner = winnerOf(status);
+  if (winner) {
+    const text = winner === "w" ? "1-0" : "0-1";
+    return { share: winner === "w" ? 1 : 0, text, detail: null, label: `Game over, ${text}.` };
   }
   if (status.kind === "draw") {
     return { share: 0.5, text: "½-½", detail: null, label: "Game over, drawn." };
@@ -443,20 +555,50 @@ function describeEvaluation(
   return { share: null, text: "…", detail: "analysing", label: "Analysing the position." };
 }
 
-function isTimeoutEnd(status: GameStatus) {
+/** Jev's judgment on the bar. Until Jev answers the bar waits; if Jev fails, Stockfish's view stands in. */
+function describeJevBar(
+  state: JevEvaluationState,
+  stockfish: { share: number | null; label: string },
+): { share: number | null; label: string } {
+  if (state.status === "ready") {
+    return { share: state.evaluation.whiteShare, label: `Jev's evaluation: ${state.evaluation.verdict}.` };
+  }
+  if (state.status === "error") return stockfish;
+  return { share: null, label: "Jev is judging the position." };
+}
+
+function JevEvaluationLine({ state }: { state: JevEvaluationState }) {
+  return (
+    <div className="flex flex-col gap-0.5 text-sm" data-testid="jev-evaluation">
+      <p className="text-muted-foreground">Jev&apos;s view</p>
+      {state.status === "ready" ? (
+        <p className="font-semibold">
+          {state.evaluation.verdict}{" "}
+          <span className="text-muted-foreground font-normal tabular-nums">
+            · {Math.round(state.evaluation.confidence * 100)}%
+          </span>
+        </p>
+      ) : state.status === "error" ? (
+        <p className="text-muted-foreground">Unavailable. {state.message}</p>
+      ) : (
+        <p className="text-muted-foreground">Judging the position…</p>
+      )}
+    </div>
+  );
+}
+
+/** Game ends that happen without a move, and so without a move sound. */
+function endedWithoutMove(status: GameStatus) {
   return (
     status.kind === "timeout" ||
-    (status.kind === "draw" && status.reason === "timeout-vs-insufficient-material")
+    status.kind === "resignation" ||
+    (status.kind === "draw" && (status.reason === "timeout-vs-insufficient-material" || status.reason === "agreement"))
   );
 }
 
 function StatusLine({ status, names }: { status: GameStatus; names: Record<Color, string> }) {
-  const side =
-    status.kind === "playing"
-      ? status.turn
-      : status.kind === "checkmate" || status.kind === "timeout"
-        ? status.winner
-        : null;
+  const winner = winnerOf(status);
+  const side = status.kind === "playing" ? status.turn : winner;
 
   return (
     <div className="flex items-center gap-3">
@@ -478,7 +620,7 @@ function StatusLine({ status, names }: { status: GameStatus; names: Record<Color
         </Badge>
       )}
       {status.kind !== "playing" && (
-        <Badge className="ml-auto">{status.kind === "draw" ? "Draw" : winsPhrase(names[status.winner])}</Badge>
+        <Badge className="ml-auto">{winner ? winsPhrase(names[winner]) : "Draw"}</Badge>
       )}
     </div>
   );

@@ -6,7 +6,7 @@ import {
   type ClockState,
   type TimeControl,
 } from "./clock";
-import { opponent, type LoadedGame, type MoveInput } from "./game";
+import { opponent, type GameEnding, type LoadedGame, type MoveInput } from "./game";
 
 /** One half-move and the clock right after it, so undo can restore the clock. */
 export type Ply = { move: MoveInput; clockAfter: ClockState | null };
@@ -21,6 +21,8 @@ export type GameState = {
   clock: ClockState | null;
   /** The side whose clock ran out, if any. */
   flagged: Color | null;
+  /** A resignation or an agreed draw, if the players ended the game. */
+  ending: GameEnding | null;
   /** Increments on every change, so views can tell one game end from another. */
   revision: number;
   /** Increments when a new game starts or one is loaded. */
@@ -31,6 +33,8 @@ export type GameAction =
   | { type: "move"; move: MoveInput; endsGame: boolean; at: number }
   | { type: "undo"; at: number }
   | { type: "flag"; color: Color; at: number }
+  | { type: "resign"; color: Color; at: number }
+  | { type: "agree-draw"; at: number }
   | { type: "new"; timeControl: TimeControl | null }
   | { type: "load"; game: LoadedGame; firstToMove: Color; timeControl: TimeControl | null };
 
@@ -50,6 +54,7 @@ export function createGameState(
     clockAtStart: clock,
     clock,
     flagged: null,
+    ending: null,
     revision: 0,
     gameId,
   };
@@ -63,7 +68,7 @@ export function sideToMove(state: Pick<GameState, "firstToMove" | "plies">): Col
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "move": {
-      if (state.flagged) return state;
+      if (state.flagged || state.ending) return state;
       const mover = sideToMove(state);
       let clock =
         state.clock && state.timeControl
@@ -86,11 +91,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const clock = restored
         ? { ...restored, runningSince: plies.length > 0 ? action.at : null }
         : null;
-      return { ...state, plies, clock, flagged: null, revision: state.revision + 1 };
+      return { ...state, plies, clock, flagged: null, ending: null, revision: state.revision + 1 };
+    }
+
+    case "resign":
+    case "agree-draw": {
+      if (state.flagged || state.ending) return state;
+      const ending: GameEnding =
+        action.type === "resign" ? { kind: "resignation", loser: action.color } : { kind: "agreement" };
+      const clock = state.clock ? stopClock(state.clock, sideToMove(state), action.at) : null;
+      return { ...state, ending, clock, revision: state.revision + 1 };
     }
 
     case "flag": {
-      if (state.flagged || !state.clock) return state;
+      if (state.flagged || state.ending || !state.clock) return state;
       const stopped = stopClock(state.clock, action.color, action.at);
       return {
         ...state,

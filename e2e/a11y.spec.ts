@@ -72,6 +72,34 @@ for (const scheme of ["light", "dark"] as const) {
       });
     }
 
+    test("a draw offer, the resign dialog and the review controls", async ({ page, isMobile }) => {
+      await preferLocalMode(page);
+      await page.goto("/");
+      await play(page, isMobile, "e2e4");
+      await page.getByRole("button", { name: "Offer draw" }).click();
+      await expect(page.getByTestId("draw-offer")).toContainText("offers a draw");
+      await expectNoViolations(page, "a pending draw offer");
+
+      await page.getByTestId("game-actions").getByRole("button", { name: "Resign" }).click();
+      await expect(page.getByRole("dialog", { name: "Resign as Black?" })).toBeVisible();
+      await expectNoViolations(page, "the resign dialog");
+      await page.getByRole("dialog").getByRole("button", { name: "Resign" }).click();
+      await page.getByRole("dialog", { name: "Resignation" }).getByRole("button", { name: "View board" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await page.getByRole("button", { name: "First position" }).click();
+      await expectNoViolations(page, "the review controls");
+    });
+
+    test("Jev's evaluation during a Jev game", async ({ page, isMobile }) => {
+      await page.addInitScript(() =>
+        window.localStorage.setItem("jev-chess:settings", JSON.stringify({ mode: "jev", evaluationInComputerGames: true })),
+      );
+      await page.goto("/");
+      await play(page, isMobile, "e2e4");
+      await expect(page.getByTestId("jev-evaluation")).toContainText(/equal|better|winning/, { timeout: 15_000 });
+      await expectNoViolations(page, "Jev's evaluation");
+    });
+
     test("the game-over dialog", async ({ page, isMobile }) => {
       await preferLocalMode(page);
       await page.goto("/");

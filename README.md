@@ -23,6 +23,9 @@ A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid
 - Play against Stockfish at three difficulty levels, with its evaluation and expected line shown
 - Hybrid mode: Stockfish shortlists its five best moves, and Jev picks the one that fits its personality. A panel shows Stockfish's ranking and evaluations beside Jev's probabilities
 - An evaluation bar beside the board, from a background Stockfish analysis. It shows in two-player games and after games against the computer, and hints stay hidden while you play the computer unless you turn them on
+- In Jev games the bar shows Jev's own judgment of the position, such as "White is slightly better", with Stockfish's number beside it
+- Resign, and offer draws: the other player answers in two-player games, Stockfish judges by its evaluation, and Jev answers a yes-or-no question in its own style. Computers consider offers from move 10
+- Review a finished game move by move with the buttons, the arrow keys, Home and End, or by clicking a move in the history
 - Keyboard play: type moves such as `e4`, `Nf3` or `e7e8q`, and moves are announced to screen readers in plain words
 - Local two-player games on one device
 - Move by clicking or by dragging pieces

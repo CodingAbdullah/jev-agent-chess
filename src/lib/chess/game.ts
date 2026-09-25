@@ -27,13 +27,18 @@ export type DrawReason =
   | "insufficient-material"
   | "threefold-repetition"
   | "fifty-move-rule"
-  | "timeout-vs-insufficient-material";
+  | "timeout-vs-insufficient-material"
+  | "agreement";
 
 export type GameStatus =
   | { kind: "playing"; turn: Color; inCheck: boolean }
   | { kind: "checkmate"; winner: Color }
   | { kind: "timeout"; winner: Color }
+  | { kind: "resignation"; winner: Color }
   | { kind: "draw"; reason: DrawReason };
+
+/** A game ended by the players rather than by the board: a resignation or an agreed draw. */
+export type GameEnding = { kind: "resignation"; loser: Color } | { kind: "agreement" };
 
 export const COLOR_NAME: Record<Color, string> = { w: "White", b: "Black" };
 
@@ -45,6 +50,7 @@ const DRAW_REASON_TEXT: Record<DrawReason, string> = {
   "threefold-repetition": "threefold repetition",
   "fifty-move-rule": "the fifty-move rule",
   "timeout-vs-insufficient-material": "timeout against insufficient material",
+  agreement: "agreement",
 };
 
 /**
@@ -79,11 +85,14 @@ export function toMoveInput(move: Move): MoveInput {
 /**
  * The game's status. `flagged` is the side whose clock ran out, if any.
  * A side that runs out of time loses, unless the opponent has no way to checkmate.
+ * `ending` is a resignation or an agreed draw, which ends the game where it stands.
  */
-export function getStatus(chess: Chess, flagged: Color | null = null): GameStatus {
+export function getStatus(chess: Chess, flagged: Color | null = null, ending: GameEnding | null = null): GameStatus {
   if (chess.isCheckmate()) {
     return { kind: "checkmate", winner: opponent(chess.turn()) };
   }
+  if (ending?.kind === "resignation") return { kind: "resignation", winner: opponent(ending.loser) };
+  if (ending?.kind === "agreement") return { kind: "draw", reason: "agreement" };
   if (flagged) {
     const winner = opponent(flagged);
     return hasMatingMaterial(chess, winner)
@@ -105,6 +114,13 @@ export function getStatus(chess: Chess, flagged: Color | null = null): GameStatu
 
 export const isGameOver = (status: GameStatus) => status.kind !== "playing";
 
+/** The side that won, or null for a draw or a game still going. */
+export function winnerOf(status: GameStatus): Color | null {
+  return status.kind === "checkmate" || status.kind === "timeout" || status.kind === "resignation"
+    ? status.winner
+    : null;
+}
+
 /** "White wins", "Jev wins", or "You win". */
 export function winsPhrase(name: string): string {
   return name === "You" ? "You win" : `${name} wins`;
@@ -117,6 +133,8 @@ export function describeStatus(status: GameStatus, names: Record<Color, string> 
       return `Checkmate. ${winsPhrase(names[status.winner])}.`;
     case "timeout":
       return `${names[opponent(status.winner)]} ran out of time. ${winsPhrase(names[status.winner])}.`;
+    case "resignation":
+      return `${names[opponent(status.winner)]} resigned. ${winsPhrase(names[status.winner])}.`;
     case "draw":
       return `Draw by ${DRAW_REASON_TEXT[status.reason]}.`;
     case "playing":
@@ -133,6 +151,8 @@ export function statusTitle(status: GameStatus): string {
       return "Checkmate";
     case "timeout":
       return "Out of time";
+    case "resignation":
+      return "Resignation";
     case "draw":
       return status.reason === "stalemate" ? "Stalemate" : "Draw";
     case "playing":
@@ -145,6 +165,7 @@ export function resultToken(status: GameStatus): "1-0" | "0-1" | "1/2-1/2" | "*"
   switch (status.kind) {
     case "checkmate":
     case "timeout":
+    case "resignation":
       return status.winner === "w" ? "1-0" : "0-1";
     case "draw":
       return "1/2-1/2";

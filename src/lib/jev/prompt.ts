@@ -1,4 +1,13 @@
-import { choice, type ChoiceQuestion, type SystemOneRequest } from "@typesafe-ai/sdk";
+import {
+  choice,
+  noul,
+  score,
+  type ChoiceQuestion,
+  type JsonValue,
+  type NoulQuestion,
+  type ScoreQuestion,
+  type SystemOneRequest,
+} from "@typesafe-ai/sdk";
 import { Chess, type Color, type Move } from "chess.js";
 import { describeMove, PIECE_NAME } from "@/lib/chess/describe";
 import { COLOR_NAME, materialBalance, PIECE_VALUE } from "@/lib/chess/game";
@@ -96,6 +105,120 @@ export function describeSafety(position: Chess, move: Move): string | null {
   } finally {
     position.undo();
   }
+}
+
+/**
+ * The levels of Jev's evaluation, from Black's side to White's. The live API
+ * answers with an expected level and a probability for each.
+ */
+export const EVALUATION_LEVELS = [
+  "Black is winning",
+  "Black is clearly better",
+  "Black is slightly better",
+  "The position is about equal",
+  "White is slightly better",
+  "White is clearly better",
+  "White is winning",
+] as const;
+
+/**
+ * Plain facts about a position. Jev cannot reliably count material from a FEN
+ * alone: without these facts it judged White a queen up as "about equal".
+ */
+export function positionFacts(chess: Chess, history: readonly string[]) {
+  const balance = materialBalance(chess);
+  const pieces: Record<Color, string[]> = { w: [], b: [] };
+  for (const row of chess.board()) {
+    for (const piece of row) {
+      if (piece) pieces[piece.color].push(`${PIECE_NAME[piece.type]} on ${piece.square}`);
+    }
+  }
+  return {
+    position_fen: chess.fen(),
+    side_to_move: COLOR_NAME[chess.turn()].toLowerCase(),
+    move_number: chess.moveNumber(),
+    in_check: chess.inCheck(),
+    material_balance_for_white: balance,
+    material:
+      balance === 0
+        ? "Material is level"
+        : `${balance > 0 ? "White" : "Black"} is ahead by ${Math.abs(balance)} points of material (pawn 1, knight 3, bishop 3, rook 5, queen 9)`,
+    white_pieces: pieces.w,
+    black_pieces: pieces.b,
+    recent_moves_san: history.slice(-HISTORY_PLIES),
+  };
+}
+
+export type EvaluationQuestions = { evaluation: ScoreQuestion<typeof EVALUATION_LEVELS> };
+
+/** Ask Jev who stands better, on the seven levels above. */
+export function buildEvaluationRequest(
+  chess: Chess,
+  history: readonly string[],
+): SystemOneRequest<EvaluationQuestions> {
+  return {
+    state: positionFacts(chess, history),
+    questions: {
+      evaluation: score(
+        "Judge this chess position. Who stands better, and by how much? Material counts most: a side a piece or more ahead is usually clearly better or winning.",
+        EVALUATION_LEVELS,
+      ),
+    },
+  };
+}
+
+/** How each personality treats a draw offer. */
+const DRAW_STYLE: Record<PersonalityId, string> = {
+  balanced: "Accept if you have no real winning chances; decline if you are better.",
+  aggressive: "You play to win and rarely accept draws. Accept only if you are clearly worse.",
+  defensive: "You value safety. Accept when the position is level or you are worse.",
+  positional: "Accept when the position is balanced and there is little left to play for.",
+  tactical: "Decline while tactics could still decide the game; accept in quiet, level positions.",
+  unpredictable: "Decide as you see fit, but do not throw away a winning position.",
+};
+
+export type DrawQuestions = { accept: NoulQuestion };
+
+/**
+ * Ask Jev whether to accept a draw. In hybrid mode, Stockfish's evaluation of
+ * the position, from Jev's side, is part of the state.
+ */
+export function buildDrawRequest(
+  chess: Chess,
+  history: readonly string[],
+  personality: PersonalityId,
+  jevColor: Color,
+  stockfishScore?: Score,
+): SystemOneRequest<DrawQuestions> {
+  const side = COLOR_NAME[jevColor];
+  const forJev = materialBalance(chess) * (jevColor === "w" ? 1 : -1);
+  const state: Record<string, JsonValue> = {
+    ...positionFacts(chess, history),
+    you_play: side.toLowerCase(),
+    material_balance_for_you: forJev,
+  };
+  if (stockfishScore) {
+    state.stockfish_evaluation_for_you = describeStockfishScore(
+      jevColor === "w" ? stockfishScore : { ...stockfishScore, value: -stockfishScore.value },
+    );
+  }
+  return {
+    state,
+    questions: {
+      accept: noul(
+        `You are playing chess as ${side}. Your opponent offers a draw. Should you accept it? ${DRAW_STYLE[personality]}`,
+        { true: "Accept the draw", false: "Decline and play on" },
+      ),
+    },
+  };
+}
+
+function describeStockfishScore(score: Score): string {
+  if (score.type === "mate") {
+    return score.value > 0 ? `You have mate in ${score.value}` : `You get mated in ${Math.abs(score.value)}`;
+  }
+  const pawns = score.value / 100;
+  return `${pawns >= 0 ? "+" : "-"}${Math.abs(pawns).toFixed(2)} pawns`;
 }
 
 /** Build the System One request that asks Jev to pick a move. */
