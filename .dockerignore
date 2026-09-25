@@ -1,0 +1,42 @@
+# Keep the build context small, and keep secrets and local output out of images.
+
+# Installed and built inside the image
+node_modules
+.next
+out
+build
+dist
+public/stockfish
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets: pass them at run time instead
+.env
+.env.*
+
+# Tests and their output
+e2e
+test
+test-results
+playwright-report
+blob-report
+coverage
+**/*.test.ts
+**/*.test.tsx
+vitest.config.mts
+vitest.setup.ts
+playwright.config.ts
+
+# Version control, editors and deployment folders
+.git
+.gitignore
+.vercel
+.vscode
+.idea
+.DS_Store
+npm-debug.log*
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+compose.yaml

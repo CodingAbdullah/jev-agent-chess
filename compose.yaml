@@ -1,0 +1,21 @@
+# Run Jev Chess with one command:
+#
+#   cp .env.example .env   # then add your TypeSafe key, or leave it empty for the mock
+#   docker compose up --build
+#
+# Then open http://localhost:3000.
+services:
+  jev-chess:
+    build: .
+    image: jev-chess
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      JEV_MOCK: ${JEV_MOCK:-}
+      JEV_RATE_LIMIT_PER_MINUTE: ${JEV_RATE_LIMIT_PER_MINUTE:-30}
+      JEV_GLOBAL_RATE_LIMIT_PER_MINUTE: ${JEV_GLOBAL_RATE_LIMIT_PER_MINUTE:-300}
+      # Optional: share the rate limits across containers through Upstash Redis.
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+    restart: unless-stopped
