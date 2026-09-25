@@ -39,8 +39,8 @@ browser tests all passing, then one commit pushed to the working branch.
 
 ## Next step
 
-Steps 1 and 2, and 5 to 10, are done. What remains, steps 3 and 4, needs the
-owner.
+Steps 1, 2 and 5 to 11 are done, and step 4's merge is done. What remains,
+step 3 and the settings at the end of step 4, needs the owner.
 
 1. **Done: phase 4 against the live API.** `npm run jev:smoke` and
    `npm run jev:live` pass with a real key: model `jev-1.13.0`, answers in 150
@@ -56,11 +56,11 @@ owner.
 3. **Deployment:** the owner deploys to Vercel and publishes the project as
    open source. For a public Vercel deployment, add Upstash Redis from the
    project's Storage tab so the rate limits hold across instances.
-4. **Merge the working branch into `main`.** All the work so far is on
-   `claude/typescript-project-scaffold-tgecg6`. The owner opens a pull request
-   into `main` and merges it. CI, the Docker publish workflow and Dependabot
-   run from `main`, so they do nothing until this happens. Vercel should
-   deploy from `main` as well. Then:
+4. **Done: merged into `main`.** The owner merged
+   `claude/typescript-project-scaffold-tgecg6` into `main` on September 25,
+   2026, so CI, the Docker publish workflow and Dependabot now run. New work
+   goes on a branch off `main` and in through a pull request. Vercel should
+   deploy from `main`. Still for the owner:
    - Turn on private vulnerability reporting under Settings, then Security.
    - After the first Docker publish, set the package to public under the
      GitHub profile's Packages tab.
@@ -76,12 +76,19 @@ owner.
    `git push --follow-tags`, then `gh release create`.
 8. **Done: `CONTRIBUTING.md`**, linked from the README.
 9. **Done: `SECURITY.md` and `.github/dependabot.yml`.** Dependabot groups
-   npm minor and patch updates, and ignores `@playwright/test`.
+   npm minor and patch updates, and ignores `@playwright/test`. See step 11
+   for the major versions it also ignores.
 10. **Done: resign and draw offers, review mode, and Jev's evaluation.** See
     phase 8 and the design decisions. A 12-move game against live Jev in the
     browser, with its evaluation on, ran without errors: Jev won material four
     times, its view moved from "about equal" to "Black is winning", and it
     declined a draw at 10 percent.
+11. **Done: the first Dependabot round.** React 19.3 and the GitHub Actions
+    updates are merged. ESLint 10 and TypeScript 7 break lint, because
+    `eslint-config-next` does not load under ESLint 10 and typescript-eslint
+    refuses TypeScript 7, so `.github/dependabot.yml` ignores their major
+    versions until Next.js supports them. It also ignores major versions of
+    `@types/node`, which follows the Node 22 in `.nvmrc` and the Dockerfile.
 
 ## Design decisions
 

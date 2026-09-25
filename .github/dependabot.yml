@@ -13,6 +13,15 @@ updates:
     ignore:
       # Pinned on purpose: it must match the Chromium in the Claude cloud environment.
       - dependency-name: "@playwright/test"
+      # eslint-config-next does not load under ESLint 10, and typescript-eslint
+      # refuses TypeScript 7. Try again once Next.js supports them.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # The types follow the Node version in .nvmrc and the Dockerfile, not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
