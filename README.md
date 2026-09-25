@@ -247,18 +247,27 @@ npx shadcn@latest add dialog
 ## Layout
 
 ```
-src/app/               pages, layouts and global styles
-src/components/chess/  game screen, board, clocks, move list and dialogs
-src/components/ui/     shadcn/ui components
-src/hooks/             React hooks, including the game state hook
-src/lib/chess/         rules, clocks and game state reducer, free of React
-src/lib/jev/           Jev prompt, move selection, mock, fallback and route validation
-src/app/api/jev/move/  the server route that calls Jev
-src/lib/stockfish/     UCI parsing, the Web Worker engine wrapper and Stockfish's move choice
-src/lib/hybrid.ts      hybrid mode: Stockfish's shortlist, then Jev's choice
-scripts/               engine copy step, live Jev smoke test and setup scripts
-src/lib/               settings, sounds, board themes and shared helpers
-e2e/                   Playwright tests
+src/app/                      pages, layouts, error pages, icon and global styles
+src/app/api/jev/              server routes that call Jev: move, evaluate and draw
+src/components/chess/         game screen, board, clocks, move list, dialogs, the Jev,
+                              Stockfish and hybrid panels, evaluation bar, review controls
+src/components/ui/            shadcn/ui components
+src/components/providers.tsx  theme and tooltip providers
+src/hooks/                    React hooks: game state, computer opponents, Stockfish,
+                              draw offers, Jev's evaluation, settings
+src/lib/                      settings, sounds, board themes, game config, draw offers,
+                              rate limiting and shared helpers
+src/lib/chess/                rules, clocks, game state reducer and move descriptions, free of React
+src/lib/jev/                  SDK client, prompts, move choice, evaluation and draw answers,
+                              mock, fallback, route checks and validation
+src/lib/stockfish/            UCI parsing, the Web Worker engine wrapper and Stockfish's move choice
+src/lib/hybrid.ts             hybrid mode: Stockfish's shortlist, then Jev's choice
+public/stockfish/             the engine, copied from npm at install (git ignores it)
+scripts/                      engine copy step, live Jev smoke test and setup scripts
+e2e/                          Playwright tests
+test/                         Vitest stubs
+docs/                         project plan
+.github/                      CI, Docker publish, React Doctor and Dependabot
 ```
 
 Unit tests sit next to the code they test, named `*.test.ts` or `*.test.tsx`.
