@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { replay, type MoveInput } from "@/lib/chess/game";
 import { decideMove, describeFailure } from "./decide";
 import { createMockFetch, MOCK_MODEL } from "./mock";
-import { buildMoveRequest, candidateMoves, describeMove, MAX_CHOICES } from "./prompt";
+import { buildMoveRequest, candidateMoves, describeMove, describeSafety, MAX_CHOICES } from "./prompt";
 import { selectMove } from "./select";
 import type { JevMoveRequest, MoveProbability } from "./types";
 import { parseMoveRequest } from "./validate";
@@ -69,8 +69,40 @@ describe("candidateMoves", () => {
     expect(capped[0]!.san).toBe("Qxf7#");
   });
 
-  it("uses a sensible default cap", () => {
-    expect(MAX_CHOICES).toBeGreaterThanOrEqual(40);
+  it("offers every legal move up to the API's limit of 255 choices", () => {
+    expect(MAX_CHOICES).toBeGreaterThanOrEqual(218);
+    expect(MAX_CHOICES).toBeLessThanOrEqual(255);
+  });
+});
+
+describe("describeSafety", () => {
+  const safety = (fen: string, san: string) => {
+    const chess = new Chess(fen);
+    const move = chess.moves({ verbose: true }).find((m) => m.san === san)!;
+    return describeSafety(new Chess(fen), move);
+  };
+  const ITALIAN = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R w KQkq - 1 5";
+
+  it("says nothing when the piece is safe", () => {
+    expect(safety(START, "Nf3")).toBeNull();
+    expect(safety(ITALIAN, "O-O")).toBeNull();
+  });
+
+  it("names the cheapest attacker and a missing defender", () => {
+    expect(safety(ITALIAN, "Ba6")).toBe("there it can be taken by a pawn and is not defended");
+    expect(safety(ITALIAN, "Bxf7+")).toBe("there it can be taken by a king and is not defended");
+  });
+
+  it("does not count a king taking a defended piece", () => {
+    // After 1.e4 e5 2.Bc4 Nc6 3.Qh5 Nf6, Qxf7 is mate; Bxf7+ is defended by the queen.
+    expect(safety("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4", "Bxf7+")).toBeNull();
+  });
+
+  it("goes into the move descriptions Jev sees", () => {
+    const question = buildMoveRequest(new Chess(ITALIAN), [], "balanced").questions.move;
+    expect(question.criteria.Ba6).toBe(
+      "Bishop from c4 to a6; there it can be taken by a pawn and is not defended",
+    );
   });
 });
 
@@ -140,6 +172,12 @@ describe("mock Jev", () => {
   it("finds a mate in one", async () => {
     const result = await mockClient().systemOne(buildMoveRequest(new Chess(MATE_IN_ONE), [], "positional"));
     expect(result.answers.move.choice).toBe("Qxf7#");
+  });
+
+  it("avoids leaving a piece where it can be taken for free", async () => {
+    const italian = "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R w KQkq - 1 5";
+    const result = await mockClient().systemOne(buildMoveRequest(new Chess(italian), [], "balanced"));
+    expect(result.answers.move.probabilities.Ba6).toBeLessThan(0.01);
   });
 
   it("gives the same answer for the same position", async () => {

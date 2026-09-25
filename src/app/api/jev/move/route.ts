@@ -8,9 +8,10 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Ask Jev for its next move. The API key stays on the server. */
 export async function POST(request: Request) {
   const limiters = jevRateLimiters();
+  // The global bucket is only charged for requests the client's own limit allows.
   const limited =
-    rejectIfLimited(limiters.perClient.check(clientKey(request.headers)), "You are asking for moves too quickly.") ??
-    rejectIfLimited(limiters.global.check("all"), "Jev is busy right now.");
+    rejectIfLimited(await limiters.perClient.check(clientKey(request.headers)), "You are asking for moves too quickly.") ??
+    rejectIfLimited(await limiters.global.check("all"), "Jev is busy right now.");
   if (limited) return limited;
 
   const text = await request.text();

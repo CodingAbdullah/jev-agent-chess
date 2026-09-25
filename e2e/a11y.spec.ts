@@ -57,8 +57,9 @@ for (const scheme of ["light", "dark"] as const) {
       await openAndCheck(page, "FEN / PGN", "Import and export");
     });
 
-    test("the screens for each computer opponent", async ({ page, isMobile }) => {
-      for (const mode of ["vs Jev", "vs Stockfish", "Hybrid"]) {
+    // One test per opponent: together they ran close to the 30 second limit on slower machines.
+    for (const mode of ["vs Jev", "vs Stockfish", "Hybrid"]) {
+      test(`the ${mode} screen`, async ({ page, isMobile }) => {
         await page.goto("/");
         await page.getByRole("button", { name: "New game" }).click();
         const dialog = page.getByRole("dialog", { name: "New game" });
@@ -68,8 +69,8 @@ for (const scheme of ["light", "dark"] as const) {
         await play(page, isMobile, "e2e4");
         await expect(status(page)).toHaveText("White to move.", { timeout: 15_000 });
         await expectNoViolations(page, `the ${mode} screen`);
-      }
-    });
+      });
+    }
 
     test("the game-over dialog", async ({ page, isMobile }) => {
       await preferLocalMode(page);

@@ -82,6 +82,13 @@ async function playAgainstComputer(page: Page, mode: string, testId: string) {
     if (await page.getByRole("dialog").count()) break;
   }
 
+  // A finished game opens a modal dialog, which hides the rest of the page
+  // from role queries. Close it before reading the history.
+  if (await page.getByRole("dialog").count()) {
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+
   // Every move made it into the history, and the computer's panel kept up.
   const cells = history.locator("span").filter({ hasText: /^[A-Za-z][\w+#=-]*$/ });
   await expect(cells).toHaveCount(plies);

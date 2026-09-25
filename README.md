@@ -1,5 +1,7 @@
 # Jev Chess
 
+[![CI](https://github.com/CodingAbdullah/jev-agent-chess/actions/workflows/ci.yml/badge.svg)](https://github.com/CodingAbdullah/jev-agent-chess/actions/workflows/ci.yml)
+
 A chess web app where you play against TypeSafe AI's Jev, Stockfish, or a hybrid of both. Built end to end in TypeScript.
 
 ## Stack
@@ -105,14 +107,25 @@ cannot drain the key's quota. The limits are set per minute:
 | `JEV_RATE_LIMIT_PER_MINUTE` | 30 | Requests from one address |
 | `JEV_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 | Requests from everyone together |
 
-The limiter keeps its counts in memory, which covers a single server. If you
-run several instances, use a shared store such as Redis, or your hosting
-platform's rate limiting, instead.
+By default the limiter keeps its counts in memory, which covers a single
+server. To share the limits across several instances, connect an
+[Upstash Redis](https://upstash.com) database. The app then keeps the counts in
+Redis through Upstash's REST API, with no extra package or open connection:
 
-Check the live connection with one real call:
+| Variable | Set by |
+| --- | --- |
+| `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` | Upstash's console |
+| `KV_REST_API_URL` and `KV_REST_API_TOKEN` | Vercel's Upstash integration, automatically |
+
+If Redis cannot be reached, each instance falls back to its own in-memory
+limits and logs a warning once a minute, so games keep working.
+
+Check the live connection with one real call, or run the live checks, which
+play a few puzzles and compare the personalities:
 
 ```bash
 npm run jev:smoke
+npm run jev:live
 ```
 
 ## Deploy
@@ -127,15 +140,24 @@ npm run jev:smoke
 3. Deploy. Vercel builds the app with its default settings; nothing else is
    needed.
 
-Vercel runs many short-lived copies of the server, and each keeps its own
-in-memory rate-limit counts. For a public deployment, add a rate-limiting rule
-for `/api/jev/move` in Vercel's firewall, or move the limiter to a shared
-store such as Redis.
+Vercel runs many short-lived copies of the server, and without a shared store
+each keeps its own rate-limit counts. For a public deployment, add Upstash
+Redis from the project's Storage tab (Marketplace, then Upstash). Vercel sets
+`KV_REST_API_URL` and `KV_REST_API_TOKEN` for you, and the limits then hold
+across every copy. Redeploy after connecting it.
 
 ### Docker
 
 The image uses Next.js standalone output and runs as a non-root user. Your key
 is passed when the container starts and is never stored in the image.
+
+Run the prebuilt image from GitHub's container registry, for amd64 and arm64:
+
+```bash
+docker run -p 3000:3000 -e TYPESAFE_API_KEY=your-key ghcr.io/codingabdullah/jev-agent-chess
+```
+
+Or build it yourself:
 
 ```bash
 docker build -t jev-chess .
@@ -172,12 +194,20 @@ protects your quota either way.
 | `npm run test:e2e`   | Builds the app and runs the Playwright tests     |
 | `npm run check`      | Runs lint, typecheck and unit tests together     |
 | `npm run jev:smoke`  | Makes one live Jev call to check the key         |
+| `npm run jev:live`   | Runs the live Jev checks: puzzles and personalities |
 
 Before the first end-to-end run on a new machine, install the browser Playwright needs:
 
 ```bash
 npx playwright install chromium
 ```
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+the checks to run before a pull request, and how releases are made. No API key
+is needed: the mock Jev covers development and every test. Report security
+problems privately, as described in [SECURITY.md](SECURITY.md).
 
 ## Licence
 

@@ -15,4 +15,7 @@ services:
       JEV_MOCK: ${JEV_MOCK:-}
       JEV_RATE_LIMIT_PER_MINUTE: ${JEV_RATE_LIMIT_PER_MINUTE:-30}
       JEV_GLOBAL_RATE_LIMIT_PER_MINUTE: ${JEV_GLOBAL_RATE_LIMIT_PER_MINUTE:-300}
+      # Optional: share the rate limits across containers through Upstash Redis.
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
     restart: unless-stopped

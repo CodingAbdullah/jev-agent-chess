@@ -14,5 +14,8 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
+    // The first test in a file pays for jsdom and module loading. On a busy
+    // machine with every file running at once that can pass the 5 second default.
+    testTimeout: 30_000,
   },
 });

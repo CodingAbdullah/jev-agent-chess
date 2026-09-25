@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm test",
     "jev:smoke": "node --env-file-if-exists=.env.local scripts/jev-smoke.mjs",
+    "jev:live": "node --env-file-if-exists=.env.local node_modules/vitest/vitest.mjs run src/lib/jev/live.test.ts --reporter=verbose",
     "postinstall": "node scripts/copy-stockfish.mjs"
   },
   "dependencies": {

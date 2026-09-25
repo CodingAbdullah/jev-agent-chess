@@ -28,9 +28,9 @@ decisions, with their confidence, are shown in the UI.
 | 1 | Convert the scaffold to Next.js with Tailwind, shadcn/ui, Vitest and Playwright | Done |
 | 2 | Board, legal-move highlights, check and checkmate, castling, promotion, en passant, local two-player play | Done |
 | 3 | Clocks, move history, captured pieces, undo, FEN and PGN import and export, board flip, themes, sound, game-over dialog, phone layout | Done |
-| 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Built and tested against the mock. Live check pending |
+| 4 | Jev mode: server route, personalities, difficulty, Jev panel, fallback on failure or timeout | Done, checked against the live API |
 | 5 | Stockfish mode: Web Worker, Stockfish-only play, evaluation bar | Done |
-| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Done, with the mock Jev |
+| 6 | Hybrid mode: Stockfish shortlists candidate moves and Jev picks one | Done, checked against the live API |
 | 7 | Polish: end-to-end tests of full games, accessibility, final phone pass | Done |
 
 Each phase ends with lint, type checks, unit tests, the production build and the
@@ -38,74 +38,44 @@ browser tests all passing, then one commit pushed to the working branch.
 
 ## Next step
 
-1. **Finish phase 4 against the live API** once a key is available. Set
-   `TYPESAFE_API_KEY` in the cloud environment's settings, add `api.typesafe.ai`
-   to its allowed network domains, and start a new session, since settings only
-   reach new sessions. Then run `npm run jev:smoke`, play a few games with the
-   mock turned off, and tune the prompt wording and `MAX_CHOICES` against real
-   answers. Check how the real API reports errors and limits.
-2. **Before a multi-instance deployment, move rate limiting to a shared store.**
-   The current limiter is in memory, so each server instance counts on its own.
+Steps 1 and 2, and 5 to 9, are done. What remains needs the owner, or is a new
+feature.
+
+1. **Done: phase 4 against the live API.** `npm run jev:smoke` and
+   `npm run jev:live` pass with a real key: model `jev-1.13.0`, answers in 150
+   to 500 ms. The live checks solve four mates and captures at 87 to 98
+   percent, and hybrid mode picks from Stockfish's shortlist. What changed:
+   `MAX_CHOICES` went from 60 to the API's real limit, and each choice now
+   says whether the moved piece can be taken. Errors come back as the SDK's
+   typed errors: 401 `AuthenticationError` for a bad key, 400 for more than
+   255 choices. A 429 has not been seen yet, so `Retry-After` from the API is
+   untested.
+2. **Done: shared rate limits.** See "Shared rate limits through Upstash
+   Redis" under design decisions.
 3. **Deployment:** the owner deploys to Vercel and publishes the project as
-   open source. Docker support lets anyone self-host.
+   open source. For a public Vercel deployment, add Upstash Redis from the
+   project's Storage tab so the rate limits hold across instances.
 4. **Merge the working branch into `main`.** All the work so far is on
    `claude/typescript-project-scaffold-tgecg6`. The owner opens a pull request
-   into `main` and merges it. The workflows below run from `main` and version
-   tags, so they do nothing until this happens. Vercel should deploy from
-   `main` as well.
-5. **Continuous integration for contributors.** Add a GitHub Actions workflow
-   that runs on every pull request and on pushes to `main`:
-   - `npm ci`, then `npm run check` (lint, type checks, unit tests).
-   - `npx playwright install --with-deps chromium`, then `npm run test:e2e`.
-     The Playwright config already sets `JEV_MOCK=1` and lifts rate limits, so
-     no secrets are needed. Upload the Playwright report when tests fail.
-   - A `docker build` of the image, so Dockerfile breakage is caught.
-   - Syntax checks of the setup scripts: `bash -n scripts/setup.sh` and
-     `shellcheck`, and `Invoke-ScriptAnalyzer` (PSScriptAnalyzer) on
-     `scripts/setup.ps1` with `pwsh`. GitHub's Ubuntu runners include
-     ShellCheck, PowerShell and PSScriptAnalyzer. Both scripts pass today.
-   - Never give pull requests from forks access to `TYPESAFE_API_KEY`.
-6. **Publish a prebuilt Docker image to GitHub's registry (GHCR).** Add
-   `.github/workflows/docker-publish.yml`:
-   - Runs on version tags such as `v1.0.0` or on a published release, and
-     optionally on pushes to `main` to keep a `latest` image.
-   - Checks out the code, logs in to `ghcr.io` with the built-in
-     `GITHUB_TOKEN` (`packages: write` permission), then builds the existing
-     `Dockerfile` and pushes `ghcr.io/codingabdullah/jev-agent-chess`.
-   - Tags each image with its version (`v1.0.0`, `1.0`) and `latest`, for
-     example with `docker/metadata-action`.
-   - Needs no secrets of its own. `TYPESAFE_API_KEY` is never used at build
-     time; people pass it when they run the container.
-   - After the first run, the owner sets the package to public under the
-     GitHub profile's Packages tab, so anyone can pull it without logging in.
-   - Add the one-line `docker run` for the published image to the README's
-     Docker section.
-7. **A release step.** The owner makes each release from `main`:
-   - Bump the version with `npm version patch`, `minor` or `major`. It
-     updates `package.json` (now `0.1.0`) and `package-lock.json`, commits,
-     and creates the matching `vX.Y.Z` tag.
-   - Push the commit and the tag with `git push --follow-tags`. The tag starts
-     the publish workflow from step 6.
-   - Create a GitHub release for the tag with short notes on what changed.
-   - `package.json` keeps `"private": true` so the app is never published
-     to npm by mistake.
-   - Describe these steps in `CONTRIBUTING.md` for future maintainers.
-8. **A CONTRIBUTING guide.** Add `CONTRIBUTING.md` covering: local setup with
-   Node 22 and the setup scripts (or `.env.example` by hand); that no API key is needed thanks to the mock;
-   the scripts to run before opening a pull request; keeping the axe
-   accessibility tests passing; never committing keys; and that contributions
-   are accepted under GPL-3.0-or-later. Link it from the README.
-9. **Open-source housekeeping.**
-   - `SECURITY.md`: how to report a vulnerability privately, through GitHub's
-     private vulnerability reporting (the owner turns it on under Settings,
-     then Security), not a public issue. Say which versions get fixes (the
-     latest release) and that a leaked `TYPESAFE_API_KEY` should be revoked
-     in TypeSafe's dashboard straight away.
-   - `.github/dependabot.yml`: weekly update checks for npm, GitHub Actions
-     and the Docker base image. Group minor and patch npm updates into one
-     pull request so they are easy to review. CI from step 5 tests each one.
-     Keep `@playwright/test` pinned: ignore its updates, since its version
-     must match the Chromium in the cloud environment.
+   into `main` and merges it. CI, the Docker publish workflow and Dependabot
+   run from `main`, so they do nothing until this happens. Vercel should
+   deploy from `main` as well. Then:
+   - Turn on private vulnerability reporting under Settings, then Security.
+   - After the first Docker publish, set the package to public under the
+     GitHub profile's Packages tab.
+5. **Done: CI** in `.github/workflows/ci.yml`: `npm run check`, the browser
+   tests with the report uploaded on failure, a Docker build, and ShellCheck
+   and PSScriptAnalyzer on the setup scripts. It uses no secrets, so pull
+   requests from forks never see `TYPESAFE_API_KEY`. The owner's
+   `react-doctor.yml` runs beside it.
+6. **Done: Docker image on GHCR** in `.github/workflows/docker-publish.yml`.
+   Version tags publish `1.2.3`, `1.2` and `latest`; pushes to `main` publish
+   `main`. It builds for amd64 and arm64 and logs in with `GITHUB_TOKEN`.
+7. **Done: release steps**, described in `CONTRIBUTING.md`: `npm version`,
+   `git push --follow-tags`, then `gh release create`.
+8. **Done: `CONTRIBUTING.md`**, linked from the README.
+9. **Done: `SECURITY.md` and `.github/dependabot.yml`.** Dependabot groups
+   npm minor and patch updates, and ignores `@playwright/test`.
 10. **Ideas not yet built:** resign and draw offers, a review mode for stepping
     through finished games, and a Jev score question for the evaluation bar in
     Jev games.
@@ -134,8 +104,15 @@ browser tests all passing, then one commit pushed to the working branch.
   the strongest move.
 - **vs Jev is the default mode**, with the player as White on Medium.
 - **Undo against Jev** takes back Jev's reply and the player's last move together.
-- **Choices are capped at 60 per question**, keeping the most forcing moves,
-  because TypeSafe has not published a limit.
+- **Jev sees every legal move.** The live API accepts at most 255 choices per
+  question and answers 400 above that; no position has more than 218 legal
+  moves. `MAX_CHOICES` is 255, so the cap only guards the limit.
+- **Each Jev-only choice says whether the moved piece can be taken** where it
+  lands, by the cheapest attacker, and whether it is defended ("there it can
+  be taken by a pawn and is not defended"). Without it, live Jev's Balanced
+  personality chose unsound sacrifices such as Bxf7+ in the Italian Game; with
+  it, Balanced castles. Hybrid choices skip it, since Stockfish's evaluation
+  covers it. The mock reads these notes too.
 - **Evaluation bar** comes from a separate background Stockfish worker. It
   shows in two-player games and once a game against the computer ends. While
   playing the computer, hints stay hidden unless the player turns on "Also
@@ -147,6 +124,14 @@ browser tests all passing, then one commit pushed to the working branch.
   and `JEV_GLOBAL_RATE_LIMIT_PER_MINUTE`. Over the limit returns 429 with
   `Retry-After`, which the panels show with a retry button. Playwright's web
   server lifts both limits.
+- **Shared rate limits through Upstash Redis.** With `UPSTASH_REDIS_REST_URL`
+  and `_TOKEN`, or Vercel's `KV_REST_API_URL` and `_TOKEN`, the same token
+  bucket runs as one Lua script in Redis over Upstash's REST API, with Redis's
+  clock, so every instance shares it. There is no Redis package and no open
+  connection, which suits serverless functions. If Redis fails or takes over a
+  second, the in-memory limiter answers and a warning is logged at most once a
+  minute: an outage weakens the limit, it never blocks games. Tested against
+  real Redis through Upstash's local HTTP emulator (SRH).
 - **Keyboard and screen readers:** a "Type a move" box under the board accepts
   SAN or coordinates. Board pieces get names such as "White knight on g1",
   and each move is announced in plain words in a polite live region. Board
@@ -238,7 +223,8 @@ browser tests all passing, then one commit pushed to the working branch.
 - `src/components/chess/hybrid-panel.tsx`: the hybrid panel. Stockfish and
   hybrid games share one engine worker for the computer's moves.
 - Every game mode in the new game dialog is now available.
-- `src/lib/rate-limit.ts`: the in-memory token-bucket limiter and client key.
+- `src/lib/rate-limit.ts`: the token-bucket limiter in memory, the same bucket
+  in Upstash Redis (`RedisRateLimiter`), and the client key.
 - `src/lib/chess/describe.ts`: plain-language move descriptions, shared by the
   Jev prompt and the screen reader announcements.
 - `src/components/chess/move-entry.tsx`: the typed move box, using
@@ -285,9 +271,14 @@ so everything below comes from the SDK's own README and type definitions.
   errors include `AuthenticationError`, `RateLimitError`, `APITimeoutError` and
   `APIConnectionError`.
 - Browser use is off by default because it would expose the key.
-- Unknown: the maximum number of choices per question, pricing, and rate limits.
-  A position can have up to 218 legal moves, though most have 30 to 40. If there
-  is a limit, shortlist moves before asking Jev.
+- Measured on September 24, 2026 against model `jev-1.13.0`: at most 255
+  choices per question (400 "Too many choices" above that), and 150 to 500 ms
+  per answer whether a question has 40 choices or 218. Usage grows by about 20
+  input and 10 output tokens per choice. A bad key returns 401. Probabilities
+  are rounded to two decimals, so small ones read as 0.
+- Still unknown: pricing, and the API's own rate limits.
+- `npm run jev:live` (`src/lib/jev/live.test.ts`) runs puzzles, a hybrid
+  shortlist and every personality against the live API. `npm test` skips it.
 
 Example, from the SDK README:
 

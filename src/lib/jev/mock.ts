@@ -44,6 +44,14 @@ function scoreDescription(description: string, style: string): number {
   if (/^pawn from [a-h][27] to [cf][45]/.test(text)) score += 0.3;
   if (text.startsWith("king from")) score -= 1;
 
+  // Safety notes: avoid giving material away, less so when told to take risks.
+  const taken = /can be taken by a (\w+)( and is not defended)?/.exec(text);
+  if (taken) {
+    const moved = CAPTURE_VALUE[/^(\w+) from/.exec(text)?.[1] ?? ""] ?? 0;
+    const loss = taken[2] ? moved : Math.max(0, moved - (CAPTURE_VALUE[taken[1]!] ?? moved));
+    score -= loss * (/aggressive/.test(style) ? 0.5 : 1);
+  }
+
   // Hybrid mode: Stockfish's notes. Its evaluation dominates; personality only tips the balance.
   const evaluation = /stockfish evaluation for you: ([+-]\d+(?:\.\d+)?) pawns/.exec(text);
   if (evaluation) score += Math.max(-10, Math.min(10, Number(evaluation[1]))) * 2;
