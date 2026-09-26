@@ -379,6 +379,11 @@ console.log(response.answers.category.choice);
 - After a drag, dnd-kit ignores clicks for 50ms. Browser tests pause briefly
   after a drag for that reason. See `e2e/helpers.ts`.
 - ESLint ignores `public/stockfish/**`, the minified third-party engine.
+- React Doctor is a dev dependency, run with `npm run doctor`. Its Claude Code
+  skill is in `.claude/skills/react-doctor/`, copied from
+  `node_modules/react-doctor/dist/skills/`; copy it again after upgrading.
+  Its installer's git pre-commit hook was left out on purpose, since CI runs
+  React Doctor on every pull request.
 - `e2e/a11y.spec.ts` runs axe's WCAG 2.2 A and AA rules on every screen and
   dialog in light and dark mode. Keep it passing when adding UI.
 - Next.js adds its own hidden `role="alert"` region, so scope alert locators in
