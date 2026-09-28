@@ -15,7 +15,7 @@ function GitHubMark({ className }: { className?: string }) {
 export function SiteFooter() {
   return (
     <footer className="text-muted-foreground flex items-center justify-between gap-4 border-t px-4 py-2 text-sm sm:px-6">
-      <p>Built by Next.js. Powered by Next.js</p>
+      <p>Built by Next.js. Powered by Vercel.</p>
       <Button asChild variant="ghost" size="icon">
         <a
           href={SOURCE_URL}
