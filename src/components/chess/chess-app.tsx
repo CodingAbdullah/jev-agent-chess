@@ -60,6 +60,7 @@ import { ImportExportDialog, type ImportExportTab } from "./import-export-dialog
 import { JevPanel } from "./jev-panel";
 import { MoveHistory } from "./move-history";
 import { KingLogo } from "./logo";
+import { SiteFooter } from "./site-footer";
 import { MoveEntry } from "./move-entry";
 import { NewGameDialog, type GameSetup } from "./new-game-dialog";
 import { PlayerBar } from "./player-bar";
@@ -478,6 +479,8 @@ export function ChessApp() {
           </Card>
         </aside>
       </main>
+
+      <SiteFooter />
 
       <NewGameDialog
         open={dialog === "new"}
